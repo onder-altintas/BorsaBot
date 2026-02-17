@@ -17,8 +17,12 @@ import {
 } from 'recharts';
 import History from './components/History/History';
 import Bots from './components/Bots/Bots';
+import Login from './components/Login/Login';
+import { useEffect } from 'react';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedStock, setSelectedStock] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,6 +38,26 @@ function App() {
     sellStock,
     updateBotConfig
   } = useTrading();
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('borsabot_user');
+    if (savedUser) {
+      setIsAuthenticated(true);
+      setCurrentUser(savedUser);
+    }
+  }, []);
+
+  const handleLogin = (username) => {
+    localStorage.setItem('borsabot_user', username);
+    setIsAuthenticated(true);
+    setCurrentUser(username);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('borsabot_user');
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+  };
 
   const filteredMarket = marketData.filter(stock =>
     stock.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -53,19 +77,31 @@ function App() {
 
   const handleBuy = async (amount) => {
     const result = await buyStock(selectedStock.symbol, amount);
-    if (result.success) setSelectedStock(null);
-    else alert(result.message);
+    if (result.success) {
+      setSelectedStock(null);
+      alert('Alım işlemi başarıyla gerçekleştirildi! ✅');
+    } else {
+      alert(result.message);
+    }
   };
 
   const handleSell = async (amount) => {
     const result = await sellStock(selectedStock.symbol, amount);
-    if (result.success) setSelectedStock(null);
-    else alert(result.message);
+    if (result.success) {
+      setSelectedStock(null);
+      alert('Satış işlemi başarıyla gerçekleştirildi! ✅');
+    } else {
+      alert(result.message);
+    }
   };
+
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />;
+  }
 
   return (
     <div className="layout">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
       <main className="main-content">
         <header className="header">
           <div className="header-search">

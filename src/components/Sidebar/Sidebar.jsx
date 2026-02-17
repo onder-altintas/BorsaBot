@@ -20,7 +20,7 @@ const SidebarItem = ({ icon: IconComponent, label, active, onClick }) => (
   </div>
 );
 
-const Sidebar = ({ activeTab, setActiveTab }) => {
+const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Panel', icon: LayoutDashboard },
     { id: 'market', label: 'Borsa', icon: LineChart },
@@ -49,7 +49,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
 
       <div className="sidebar-footer">
         <SidebarItem icon={Settings} label="Ayarlar" />
-        <SidebarItem icon={LogOut} label="Çıkış Yap" />
+        <SidebarItem icon={LogOut} label="Çıkış Yap" onClick={onLogout} />
       </div>
     </div>
   );

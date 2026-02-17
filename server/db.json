@@ -1,132 +1,270 @@
 {
-  "balance": 100000,
-  "portfolio": [],
-  "history": [],
+  "balance": 11440.830000000002,
+  "portfolio": [
+    {
+      "symbol": "THYAO",
+      "amount": 310,
+      "averageCost": 285.67474193548384
+    }
+  ],
+  "history": [
+    {
+      "id": 1771324151519.3403,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 1,
+      "price": 285.23,
+      "total": 285.23,
+      "date": "17.02.2026 13:29:11",
+      "isAuto": true
+    },
+    {
+      "id": 1771323412240,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 1,
+      "price": 285.14,
+      "total": 285.14,
+      "date": "17.02.2026 13:16:52",
+      "isAuto": false
+    },
+    {
+      "id": 1771323331507,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 1,
+      "price": 285.63,
+      "total": 285.63,
+      "date": "17.02.2026 13:15:31",
+      "isAuto": false
+    },
+    {
+      "id": 1771323293149,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 1,
+      "price": 284.98,
+      "total": 284.98,
+      "date": "17.02.2026 13:14:53",
+      "isAuto": false
+    },
+    {
+      "id": 1771323204800,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 1,
+      "price": 285.5,
+      "total": 285.5,
+      "date": "17.02.2026 13:13:24",
+      "isAuto": false
+    },
+    {
+      "id": 1771323049860,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 1,
+      "price": 285.5,
+      "total": 285.5,
+      "date": "17.02.2026 13:10:49",
+      "isAuto": false
+    },
+    {
+      "id": 1771323038823,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 1,
+      "price": 285.5,
+      "total": 285.5,
+      "date": "17.02.2026 13:10:38",
+      "isAuto": false
+    },
+    {
+      "id": 1771323019453,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 1,
+      "price": 286.1,
+      "total": 286.1,
+      "date": "17.02.2026 13:10:19",
+      "isAuto": false
+    },
+    {
+      "id": 1771322998514,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 1,
+      "price": 286.09,
+      "total": 286.09,
+      "date": "17.02.2026 13:09:58",
+      "isAuto": false
+    },
+    {
+      "id": 1771322874878,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 1,
+      "price": 285.5,
+      "total": 285.5,
+      "date": "17.02.2026 13:07:54",
+      "isAuto": false
+    },
+    {
+      "id": 1771322800842,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 100,
+      "price": 285.92,
+      "total": 28592,
+      "date": "17.02.2026 13:06:40",
+      "isAuto": false
+    },
+    {
+      "id": 1771322796455,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 100,
+      "price": 285.62,
+      "total": 28562,
+      "date": "17.02.2026 13:06:36",
+      "isAuto": false
+    },
+    {
+      "id": 1771322791810,
+      "type": "ALIM",
+      "symbol": "THYAO",
+      "amount": 100,
+      "price": 285.5,
+      "total": 28550,
+      "date": "17.02.2026 13:06:31",
+      "isAuto": false
+    }
+  ],
   "wealthHistory": [
     {
-      "time": "12:42:01",
-      "wealth": 100000
+      "time": "13:24:45",
+      "wealth": 99834.31999999999
     },
     {
-      "time": "12:42:11",
-      "wealth": 100000
+      "time": "13:24:55",
+      "wealth": 99970.28
     },
     {
-      "time": "12:42:22",
-      "wealth": 100000
+      "time": "13:25:05",
+      "wealth": 99936.29000000001
     },
     {
-      "time": "12:42:32",
-      "wealth": 100000
+      "time": "13:25:16",
+      "wealth": 99673.64
     },
     {
-      "time": "12:42:42",
-      "wealth": 100000
+      "time": "13:25:26",
+      "wealth": 100211.3
     },
     {
-      "time": "12:42:52",
-      "wealth": 100000
+      "time": "13:25:36",
+      "wealth": 99664.37
     },
     {
-      "time": "12:43:03",
-      "wealth": 100000
+      "time": "13:25:46",
+      "wealth": 99880.67
     },
     {
-      "time": "12:43:13",
-      "wealth": 100000
+      "time": "13:25:57",
+      "wealth": 100362.71
     },
     {
-      "time": "12:43:23",
-      "wealth": 100000
+      "time": "13:26:07",
+      "wealth": 100124.78
     },
     {
-      "time": "12:43:34",
-      "wealth": 100000
+      "time": "13:26:17",
+      "wealth": 99652.01
     },
     {
-      "time": "12:43:44",
-      "wealth": 100000
+      "time": "13:26:28",
+      "wealth": 99939.38
     },
     {
-      "time": "12:43:54",
-      "wealth": 100000
+      "time": "13:26:38",
+      "wealth": 100103.15
     },
     {
-      "time": "12:44:05",
-      "wealth": 100000
+      "time": "13:26:48",
+      "wealth": 99812.69
     },
     {
-      "time": "12:44:15",
-      "wealth": 100000
+      "time": "13:26:58",
+      "wealth": 99642.73999999999
     },
     {
-      "time": "12:44:25",
-      "wealth": 100000
+      "time": "13:27:09",
+      "wealth": 99546.95
     },
     {
-      "time": "12:44:36",
-      "wealth": 100000
+      "time": "13:27:19",
+      "wealth": 99868.31
     },
     {
-      "time": "12:44:46",
-      "wealth": 100000
+      "time": "13:27:29",
+      "wealth": 99948.65
     },
     {
-      "time": "12:44:56",
-      "wealth": 100000
+      "time": "13:27:40",
+      "wealth": 99973.37
     },
     {
-      "time": "12:45:07",
-      "wealth": 100000
+      "time": "13:27:50",
+      "wealth": 99862.13
     },
     {
-      "time": "12:45:17",
-      "wealth": 100000
+      "time": "13:28:00",
+      "wealth": 100226.75
     },
     {
-      "time": "12:45:27",
-      "wealth": 100000
+      "time": "13:28:10",
+      "wealth": 100022.81
     },
     {
-      "time": "12:45:37",
-      "wealth": 100000
+      "time": "13:28:21",
+      "wealth": 100072.25
     },
     {
-      "time": "12:45:48",
-      "wealth": 100000
+      "time": "13:28:31",
+      "wealth": 99787.97
     },
     {
-      "time": "12:45:58",
-      "wealth": 100000
+      "time": "13:28:41",
+      "wealth": 99825.05
     },
     {
-      "time": "12:46:08",
-      "wealth": 100000
+      "time": "13:28:51",
+      "wealth": 99837.40999999999
     },
     {
-      "time": "12:46:19",
-      "wealth": 100000
+      "time": "13:29:02",
+      "wealth": 100134.05
     },
     {
-      "time": "12:46:29",
-      "wealth": 100000
+      "time": "13:29:21",
+      "wealth": 100020.23000000001
     },
     {
-      "time": "12:46:39",
-      "wealth": 100000
+      "time": "13:29:32",
+      "wealth": 100187.62999999999
     },
     {
-      "time": "12:46:50",
-      "wealth": 100000
+      "time": "13:29:42",
+      "wealth": 99924.13
     },
     {
-      "time": "12:47:00",
-      "wealth": 100000
+      "time": "13:29:52",
+      "wealth": 99852.83
     }
   ],
   "botConfigs": {
     "THYAO": {
-      "active": false
+      "active": true,
+      "amount": 1
     }
   }
 }

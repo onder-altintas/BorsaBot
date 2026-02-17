@@ -9,6 +9,7 @@ export const useTrading = (currentUser) => {
     const [marketData, setMarketData] = useState([]);
     const [wealthHistory, setWealthHistory] = useState([]);
     const [botConfigs, setBotConfigs] = useState({});
+    const [isConnected, setIsConnected] = useState(true);
 
     const fetchData = async () => {
         if (!currentUser) return;
@@ -19,6 +20,12 @@ export const useTrading = (currentUser) => {
                     headers: { 'x-user': currentUser }
                 })
             ]);
+
+            if (marketRes.ok && userRes.ok) {
+                setIsConnected(true);
+            } else {
+                setIsConnected(false);
+            }
 
             const mData = await marketRes.json();
             const uData = await userRes.json();
@@ -34,6 +41,7 @@ export const useTrading = (currentUser) => {
             }
         } catch (error) {
             console.error('Veri çekme hatası:', error);
+            setIsConnected(false);
         }
     };
 
@@ -114,6 +122,7 @@ export const useTrading = (currentUser) => {
         marketData,
         wealthHistory,
         botConfigs,
+        isConnected,
         buyStock,
         sellStock,
         updateBotConfig

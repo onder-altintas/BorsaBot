@@ -36,7 +36,8 @@ function App() {
     botConfigs,
     buyStock,
     sellStock,
-    updateBotConfig
+    updateBotConfig,
+    isConnected
   } = useTrading(currentUser);
 
   useEffect(() => {
@@ -114,6 +115,11 @@ function App() {
             />
           </div>
           <div className="header-profile">
+            {!isConnected && (
+              <div className="connection-error-badge">
+                Sunucu Bağlantısı Yok
+              </div>
+            )}
             <div className="budget-badge">
               <span className="text-secondary text-sm">Toplam Varlık</span>
               <span className="font-bold">₺{totalWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>

@@ -2,47 +2,56 @@ import { useState, useEffect, useCallback } from 'react';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
-export const useTrading = () => {
-    const [balance, setBalance] = useState(100000.00);
+export const useTrading = (currentUser) => {
+    const [balance, setBalance] = useState(100000);
     const [portfolio, setPortfolio] = useState([]);
     const [history, setHistory] = useState([]);
     const [marketData, setMarketData] = useState([]);
     const [wealthHistory, setWealthHistory] = useState([]);
     const [botConfigs, setBotConfigs] = useState({});
 
-    const fetchData = useCallback(async () => {
+    const fetchData = async () => {
+        if (!currentUser) return;
         try {
             const [marketRes, userRes] = await Promise.all([
                 fetch(`${API_BASE_URL}/market`),
-                fetch(`${API_BASE_URL}/user/data`)
+                fetch(`${API_BASE_URL}/user/data`, {
+                    headers: { 'x-user': currentUser }
+                })
             ]);
 
-            const marketJson = await marketRes.json();
-            const userJson = await userRes.json();
+            const mData = await marketRes.json();
+            const uData = await userRes.json();
 
-            setMarketData(marketJson);
-            setBalance(userJson.balance);
-            setPortfolio(userJson.portfolio);
-            setHistory(userJson.history);
-            setWealthHistory(userJson.wealthHistory);
-            setBotConfigs(userJson.botConfigs);
+            if (marketRes.ok) setMarketData(mData);
+
+            if (userRes.ok && uData && !uData.error) {
+                setBalance(uData.balance ?? 100000);
+                setPortfolio(uData.portfolio ?? []);
+                setHistory(uData.history ?? []);
+                setWealthHistory(uData.wealthHistory ?? []);
+                setBotConfigs(uData.botConfigs ?? {});
+            }
         } catch (error) {
-            console.error('Failed to fetch data from server:', error);
+            console.error('Veri çekme hatası:', error);
         }
-    }, []);
+    };
 
-    // Initial fetch and periodic refresh
     useEffect(() => {
         fetchData();
         const interval = setInterval(fetchData, 3000);
         return () => clearInterval(interval);
-    }, [fetchData]);
+    }, [currentUser]);
 
     const buyStock = async (symbol, amount) => {
+        if (!currentUser) return { success: false, message: 'Giriş yapılmalı.' };
         try {
             const res = await fetch(`${API_BASE_URL}/trade/buy`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user': currentUser
+                },
                 body: JSON.stringify({ symbol, amount })
             });
             const result = await res.json();
@@ -57,10 +66,14 @@ export const useTrading = () => {
     };
 
     const sellStock = async (symbol, amount) => {
+        if (!currentUser) return { success: false, message: 'Giriş yapılmalı.' };
         try {
             const res = await fetch(`${API_BASE_URL}/trade/sell`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user': currentUser
+                },
                 body: JSON.stringify({ symbol, amount })
             });
             const result = await res.json();
@@ -75,18 +88,22 @@ export const useTrading = () => {
     };
 
     const updateBotConfig = async (symbol, config) => {
+        if (!currentUser) return;
         try {
             const res = await fetch(`${API_BASE_URL}/bot/config`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user': currentUser
+                },
                 body: JSON.stringify({ symbol, config })
             });
             const result = await res.json();
             if (result.success) {
-                fetchData();
+                setBotConfigs(result.data);
             }
         } catch (error) {
-            console.error('Failed to update bot config:', error);
+            console.error('Bot ayarı güncelleme hatası:', error);
         }
     };
 

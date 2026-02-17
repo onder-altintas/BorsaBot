@@ -6,29 +6,58 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors()); // Allow all origins for easier setup
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'x-user']
+}));
 app.use(express.json());
 
-// Database setup (simple JSON file for persistence)
+// Database setup (multi-user structure)
 const DB_PATH = path.join(__dirname, 'db.json');
-const INITIAL_DATA = {
+
+const createUserData = () => ({
     balance: 100000.00,
     portfolio: [],
     history: [],
     wealthHistory: [{ time: new Date().toLocaleTimeString(), wealth: 100000 }],
     botConfigs: {}
-};
+});
 
 function readDb() {
     if (!fs.existsSync(DB_PATH)) {
-        fs.writeFileSync(DB_PATH, JSON.stringify(INITIAL_DATA, null, 2));
-        return INITIAL_DATA;
+        const initial = { users: {} };
+        fs.writeFileSync(DB_PATH, JSON.stringify(initial, null, 2));
+        return initial;
     }
-    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+    const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+
+    // Migration: If old format exists, move to 'users.önder'
+    if (!data.users) {
+        const oldData = { ...data };
+        const migrated = {
+            users: {
+                'önder': oldData
+            }
+        };
+        // Clean up root level
+        delete migrated.users['önder'].users;
+        writeDb(migrated);
+        return migrated;
+    }
+    return data;
 }
 
 function writeDb(data) {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+}
+
+function getUser(db, username) {
+    if (!username) return null;
+    if (!db.users[username]) {
+        db.users[username] = createUserData();
+    }
+    return db.users[username];
 }
 
 // BIST 100 Major Stocks
@@ -103,61 +132,64 @@ setInterval(() => {
         };
     });
 
-    // Execute Bots
+    // Execute Bots for ALL Users
     const db = readDb();
     let dbChanged = false;
 
-    marketData.forEach(stock => {
-        const config = db.botConfigs[stock.symbol];
-        if (config && config.active) {
-            const rec = stock.indicators?.recommendation;
-            if (rec === 'GÜÇLÜ AL') {
-                const cost = stock.price * (config.amount || 1);
-                if (db.balance >= cost) {
-                    db.balance -= cost;
-                    const existing = db.portfolio.find(p => p.symbol === stock.symbol);
-                    if (existing) {
-                        const totalOwned = existing.amount + (config.amount || 1);
-                        existing.averageCost = (existing.averageCost * existing.amount + cost) / totalOwned;
-                        existing.amount = totalOwned;
-                    } else {
-                        db.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: stock.price });
+    Object.keys(db.users).forEach(username => {
+        const userData = db.users[username];
+        marketData.forEach(stock => {
+            const config = userData.botConfigs[stock.symbol];
+            if (config && config.active) {
+                const rec = stock.indicators?.recommendation;
+                if (rec === 'GÜÇLÜ AL') {
+                    const cost = stock.price * (config.amount || 1);
+                    if (userData.balance >= cost) {
+                        userData.balance -= cost;
+                        const existing = userData.portfolio.find(p => p.symbol === stock.symbol);
+                        if (existing) {
+                            const totalOwned = existing.amount + (config.amount || 1);
+                            existing.averageCost = (existing.averageCost * existing.amount + cost) / totalOwned;
+                            existing.amount = totalOwned;
+                        } else {
+                            userData.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: stock.price });
+                        }
+                        userData.history.unshift({
+                            id: Date.now() + Math.random(),
+                            type: 'ALIM',
+                            symbol: stock.symbol,
+                            amount: config.amount || 1,
+                            price: stock.price,
+                            total: cost,
+                            date: new Date().toLocaleString('tr-TR'),
+                            isAuto: true
+                        });
+                        dbChanged = true;
                     }
-                    db.history.unshift({
-                        id: Date.now() + Math.random(),
-                        type: 'ALIM',
-                        symbol: stock.symbol,
-                        amount: config.amount || 1,
-                        price: stock.price,
-                        total: cost,
-                        date: new Date().toLocaleString('tr-TR'),
-                        isAuto: true
-                    });
-                    dbChanged = true;
-                }
-            } else if (rec === 'GÜÇLÜ SAT') {
-                const stockInPortfolio = db.portfolio.find(p => p.symbol === stock.symbol);
-                if (stockInPortfolio && stockInPortfolio.amount >= (config.amount || 1)) {
-                    const revenue = stock.price * (config.amount || 1);
-                    db.balance += revenue;
-                    stockInPortfolio.amount -= (config.amount || 1);
-                    if (stockInPortfolio.amount === 0) {
-                        db.portfolio = db.portfolio.filter(p => p.symbol !== stock.symbol);
+                } else if (rec === 'GÜÇLÜ SAT') {
+                    const stockInPortfolio = userData.portfolio.find(p => p.symbol === stock.symbol);
+                    if (stockInPortfolio && stockInPortfolio.amount >= (config.amount || 1)) {
+                        const revenue = stock.price * (config.amount || 1);
+                        userData.balance += revenue;
+                        stockInPortfolio.amount -= (config.amount || 1);
+                        if (stockInPortfolio.amount === 0) {
+                            userData.portfolio = userData.portfolio.filter(p => p.symbol !== stock.symbol);
+                        }
+                        userData.history.unshift({
+                            id: Date.now() + Math.random(),
+                            type: 'SATIM',
+                            symbol: stock.symbol,
+                            amount: config.amount || 1,
+                            price: stock.price,
+                            total: revenue,
+                            date: new Date().toLocaleString('tr-TR'),
+                            isAuto: true
+                        });
+                        dbChanged = true;
                     }
-                    db.history.unshift({
-                        id: Date.now() + Math.random(),
-                        type: 'SATIM',
-                        symbol: stock.symbol,
-                        amount: config.amount || 1,
-                        price: stock.price,
-                        total: revenue,
-                        date: new Date().toLocaleString('tr-TR'),
-                        isAuto: true
-                    });
-                    dbChanged = true;
                 }
             }
-        }
+        });
     });
 
     if (dbChanged) writeDb(db);
@@ -167,41 +199,55 @@ setInterval(() => {
 // wealth history update every 10 seconds
 setInterval(() => {
     const db = readDb();
-    const currentPortfolioValue = db.portfolio.reduce((acc, item) => {
-        const mStock = marketData.find(s => s.symbol === item.symbol);
-        return acc + (mStock ? mStock.price * item.amount : 0);
-    }, 0);
-    const totalWealth = db.balance + currentPortfolioValue;
-    db.wealthHistory = [...db.wealthHistory, { time: new Date().toLocaleTimeString(), wealth: totalWealth }].slice(-30);
-    writeDb(db);
+    let dbChanged = false;
+    Object.keys(db.users).forEach(username => {
+        const userData = db.users[username];
+        const currentPortfolioValue = userData.portfolio.reduce((acc, item) => {
+            const mStock = marketData.find(s => s.symbol === item.symbol);
+            return acc + (mStock ? mStock.price * item.amount : 0);
+        }, 0);
+        const totalWealth = userData.balance + currentPortfolioValue;
+        userData.wealthHistory = [...userData.wealthHistory, { time: new Date().toLocaleTimeString(), wealth: totalWealth }].slice(-30);
+        dbChanged = true;
+    });
+    if (dbChanged) writeDb(db);
 }, 10000);
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json(marketData));
-app.get('/api/user/data', (req, res) => res.json(readDb()));
+
+app.get('/api/user/data', (req, res) => {
+    const username = req.headers['x-user'];
+    if (!username) return res.status(401).json({ error: 'Auth required' });
+    const db = readDb();
+    const userData = getUser(db, username);
+    writeDb(db); // Save if auto-created
+    res.json(userData);
+});
 
 app.post('/api/trade/buy', (req, res) => {
+    const username = req.headers['x-user'];
+    if (!username) return res.status(401).json({ error: 'Auth required' });
     const { symbol, amount } = req.body;
     const stock = marketData.find(s => s.symbol === symbol);
     if (!stock) return res.status(404).json({ success: false, message: 'Hisse bulunamadı.' });
 
     const db = readDb();
+    const userData = getUser(db, username);
     const cost = stock.price * amount;
-    if (cost > db.balance) return res.status(400).json({ success: false, message: 'Yetersiz bakiye.' });
+    if (cost > userData.balance) return res.status(400).json({ success: false, message: 'Yetersiz bakiye.' });
 
-    db.balance -= cost;
-    const existing = db.portfolio.find(p => p.symbol === symbol);
+    userData.balance -= cost;
+    const existing = userData.portfolio.find(p => p.symbol === symbol);
     if (existing) {
         const totalOwned = existing.amount + amount;
-        db.portfolio = db.portfolio.map(p => p.symbol === symbol
-            ? { ...p, amount: totalOwned, averageCost: (p.averageCost * p.amount + cost) / totalOwned }
-            : p
-        );
+        existing.averageCost = (existing.averageCost * existing.amount + cost) / totalOwned;
+        existing.amount = totalOwned;
     } else {
-        db.portfolio.push({ symbol, amount, averageCost: stock.price });
+        userData.portfolio.push({ symbol, amount, averageCost: stock.price });
     }
 
-    db.history.unshift({
+    userData.history.unshift({
         id: Date.now(),
         type: 'ALIM',
         symbol,
@@ -213,13 +259,16 @@ app.post('/api/trade/buy', (req, res) => {
     });
 
     writeDb(db);
-    res.json({ success: true, data: db });
+    res.json({ success: true, data: userData });
 });
 
 app.post('/api/trade/sell', (req, res) => {
+    const username = req.headers['x-user'];
+    if (!username) return res.status(401).json({ error: 'Auth required' });
     const { symbol, amount } = req.body;
     const db = readDb();
-    const stockInPortfolio = db.portfolio.find(p => p.symbol === symbol);
+    const userData = getUser(db, username);
+    const stockInPortfolio = userData.portfolio.find(p => p.symbol === symbol);
     if (!stockInPortfolio || stockInPortfolio.amount < amount) {
         return res.status(400).json({ success: false, message: 'Yetersiz hisse adedi.' });
     }
@@ -227,13 +276,13 @@ app.post('/api/trade/sell', (req, res) => {
     const stock = marketData.find(s => s.symbol === symbol);
     const revenue = (stock ? stock.price : 0) * amount;
 
-    db.balance += revenue;
-    db.portfolio = db.portfolio.map(p => p.symbol === symbol
-        ? { ...p, amount: p.amount - amount }
-        : p
-    ).filter(p => p.amount > 0);
+    userData.balance += revenue;
+    stockInPortfolio.amount -= amount;
+    if (stockInPortfolio.amount === 0) {
+        userData.portfolio = userData.portfolio.filter(p => p.symbol !== symbol);
+    }
 
-    db.history.unshift({
+    userData.history.unshift({
         id: Date.now(),
         type: 'SATIM',
         symbol,
@@ -245,15 +294,18 @@ app.post('/api/trade/sell', (req, res) => {
     });
 
     writeDb(db);
-    res.json({ success: true, data: db });
+    res.json({ success: true, data: userData });
 });
 
 app.post('/api/bot/config', (req, res) => {
+    const username = req.headers['x-user'];
+    if (!username) return res.status(401).json({ error: 'Auth required' });
     const { symbol, config } = req.body;
     const db = readDb();
-    db.botConfigs[symbol] = { ...db.botConfigs[symbol], ...config };
+    const userData = getUser(db, username);
+    userData.botConfigs[symbol] = { ...userData.botConfigs[symbol], ...config };
     writeDb(db);
-    res.json({ success: true, data: db.botConfigs });
+    res.json({ success: true, data: userData.botConfigs });
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

@@ -37,7 +37,7 @@ function App() {
     buyStock,
     sellStock,
     updateBotConfig
-  } = useTrading();
+  } = useTrading(currentUser);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('borsabot_user');
@@ -64,16 +64,16 @@ function App() {
     stock.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalPortfolioValue = portfolio.reduce((acc, item) => {
+  const totalPortfolioValue = Array.isArray(portfolio) ? portfolio.reduce((acc, item) => {
     const marketInfo = marketData.find(s => s.symbol === item.symbol);
     const currentPrice = marketInfo ? marketInfo.price : 0;
     return acc + (currentPrice * item.amount);
-  }, 0);
+  }, 0) : 0;
 
   const totalWealth = balance + totalPortfolioValue;
   const initialWealth = 100000;
   const totalProfit = totalWealth - initialWealth;
-  const profitPercent = ((totalProfit / initialWealth) * 100).toFixed(2);
+  const profitPercent = initialWealth > 0 ? ((totalProfit / initialWealth) * 100).toFixed(2) : "0.00";
 
   const handleBuy = async (amount) => {
     const result = await buyStock(selectedStock.symbol, amount);

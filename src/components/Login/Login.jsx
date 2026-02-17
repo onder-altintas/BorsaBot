@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, Lock, User, AlertCircle } from 'lucide-react';
+import { TrendingUp, Lock, User, CircleAlert } from 'lucide-react';
 import './Login.css';
 
 const Login = ({ onLogin }) => {
@@ -77,7 +77,7 @@ const Login = ({ onLogin }) => {
 
                     {error && (
                         <div className="login-error slide-in">
-                            <AlertCircle size={16} />
+                            <CircleAlert size={16} />
                             <span>{error}</span>
                         </div>
                     )}

@@ -50,7 +50,6 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
       <div className="sidebar-footer">
         <SidebarItem icon={Settings} label="Ayarlar" />
         <SidebarItem icon={LogOut} label="Çıkış Yap" />
-        <div className="version-tag text-xs text-secondary mt-2 text-center">v1.2.0-refactor</div>
       </div>
     </div>
   );

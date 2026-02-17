@@ -14,8 +14,8 @@ export const useTrading = (currentUser) => {
         if (!currentUser) return;
         try {
             const [marketRes, userRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/market`),
-                fetch(`${API_BASE_URL}/user/data`, {
+                fetch(`${API_BASE_URL}/market?t=${Date.now()}`),
+                fetch(`${API_BASE_URL}/user/data?t=${Date.now()}`, {
                     headers: { 'x-user': currentUser }
                 })
             ]);

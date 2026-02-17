@@ -112,105 +112,112 @@ const calculateIndicators = (history, currentPrice) => {
 
 // Simulation Engine: Runs every 3 seconds
 setInterval(() => {
-    marketData = marketData.map(stock => {
-        const volatility = 0.002;
-        const change = (Math.random() - 0.5) * 2 * volatility * stock.price;
-        const newPrice = parseFloat((stock.price + change).toFixed(2));
-        const totalChange = newPrice - stock.basePrice;
-        const totalChangePercent = (totalChange / stock.basePrice) * 100;
+    try {
+        marketData = marketData.map(stock => {
+            const volatility = 0.002;
+            const change = (Math.random() - 0.5) * 2 * volatility * stock.price;
+            const newPrice = parseFloat((stock.price + change).toFixed(2));
+            const totalChange = newPrice - stock.basePrice;
+            const totalChangePercent = (totalChange / stock.basePrice) * 100;
 
-        const newHistory = [...stock.priceHistory, { time: new Date().toLocaleTimeString(), price: newPrice }].slice(-20);
-        const indicators = calculateIndicators(newHistory, newPrice);
+            const newHistory = [...stock.priceHistory, { time: new Date().toLocaleTimeString(), price: newPrice }].slice(-20);
+            const indicators = calculateIndicators(newHistory, newPrice);
 
-        return {
-            ...stock,
-            price: newPrice,
-            change: parseFloat(totalChange.toFixed(2)),
-            changePercent: parseFloat(totalChangePercent.toFixed(2)),
-            priceHistory: newHistory,
-            indicators
-        };
-    });
+            return {
+                ...stock,
+                price: newPrice,
+                change: parseFloat(totalChange.toFixed(2)),
+                changePercent: parseFloat(totalChangePercent.toFixed(2)),
+                priceHistory: newHistory,
+                indicators
+            };
+        });
 
-    // Execute Bots for ALL Users
-    const db = readDb();
-    let dbChanged = false;
+        // Execute Bots for ALL Users
+        const db = readDb();
+        let dbChanged = false;
 
-    Object.keys(db.users).forEach(username => {
-        const userData = db.users[username];
-        marketData.forEach(stock => {
-            const config = userData.botConfigs[stock.symbol];
-            if (config && config.active) {
-                const rec = stock.indicators?.recommendation;
-                if (rec === 'GÜÇLÜ AL') {
-                    const cost = stock.price * (config.amount || 1);
-                    if (userData.balance >= cost) {
-                        userData.balance -= cost;
-                        const existing = userData.portfolio.find(p => p.symbol === stock.symbol);
-                        if (existing) {
-                            const totalOwned = existing.amount + (config.amount || 1);
-                            existing.averageCost = (existing.averageCost * existing.amount + cost) / totalOwned;
-                            existing.amount = totalOwned;
-                        } else {
-                            userData.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: stock.price });
+        Object.keys(db.users).forEach(username => {
+            const userData = db.users[username];
+            marketData.forEach(stock => {
+                const config = userData.botConfigs[stock.symbol];
+                if (config && config.active) {
+                    const rec = stock.indicators?.recommendation;
+                    if (rec === 'GÜÇLÜ AL') {
+                        const cost = stock.price * (config.amount || 1);
+                        if (userData.balance >= cost) {
+                            userData.balance -= cost;
+                            const existing = userData.portfolio.find(p => p.symbol === stock.symbol);
+                            if (existing) {
+                                const totalOwned = existing.amount + (config.amount || 1);
+                                existing.averageCost = (existing.averageCost * existing.amount + cost) / totalOwned;
+                                existing.amount = totalOwned;
+                            } else {
+                                userData.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: stock.price });
+                            }
+                            userData.history.unshift({
+                                id: Date.now() + Math.random(),
+                                type: 'ALIM',
+                                symbol: stock.symbol,
+                                amount: config.amount || 1,
+                                price: stock.price,
+                                total: cost,
+                                date: new Date().toLocaleString('tr-TR'),
+                                isAuto: true
+                            });
+                            dbChanged = true;
                         }
-                        userData.history.unshift({
-                            id: Date.now() + Math.random(),
-                            type: 'ALIM',
-                            symbol: stock.symbol,
-                            amount: config.amount || 1,
-                            price: stock.price,
-                            total: cost,
-                            date: new Date().toLocaleString('tr-TR'),
-                            isAuto: true
-                        });
-                        dbChanged = true;
-                    }
-                } else if (rec === 'GÜÇLÜ SAT') {
-                    const stockInPortfolio = userData.portfolio.find(p => p.symbol === stock.symbol);
-                    if (stockInPortfolio && stockInPortfolio.amount >= (config.amount || 1)) {
-                        const revenue = stock.price * (config.amount || 1);
-                        userData.balance += revenue;
-                        stockInPortfolio.amount -= (config.amount || 1);
-                        if (stockInPortfolio.amount === 0) {
-                            userData.portfolio = userData.portfolio.filter(p => p.symbol !== stock.symbol);
+                    } else if (rec === 'GÜÇLÜ SAT') {
+                        const stockInPortfolio = userData.portfolio.find(p => p.symbol === stock.symbol);
+                        if (stockInPortfolio && stockInPortfolio.amount >= (config.amount || 1)) {
+                            const revenue = stock.price * (config.amount || 1);
+                            userData.balance += revenue;
+                            stockInPortfolio.amount -= (config.amount || 1);
+                            if (stockInPortfolio.amount === 0) {
+                                userData.portfolio = userData.portfolio.filter(p => p.symbol !== stock.symbol);
+                            }
+                            userData.history.unshift({
+                                id: Date.now() + Math.random(),
+                                type: 'SATIM',
+                                symbol: stock.symbol,
+                                amount: config.amount || 1,
+                                price: stock.price,
+                                total: revenue,
+                                date: new Date().toLocaleString('tr-TR'),
+                                isAuto: true
+                            });
+                            dbChanged = true;
                         }
-                        userData.history.unshift({
-                            id: Date.now() + Math.random(),
-                            type: 'SATIM',
-                            symbol: stock.symbol,
-                            amount: config.amount || 1,
-                            price: stock.price,
-                            total: revenue,
-                            date: new Date().toLocaleString('tr-TR'),
-                            isAuto: true
-                        });
-                        dbChanged = true;
                     }
                 }
-            }
+            });
         });
-    });
 
-    if (dbChanged) writeDb(db);
-
+        if (dbChanged) writeDb(db);
+    } catch (error) {
+        console.error('Simülasyon Hatası:', error);
+    }
 }, 3000);
 
 // wealth history update every 10 seconds
 setInterval(() => {
-    const db = readDb();
-    let dbChanged = false;
-    Object.keys(db.users).forEach(username => {
-        const userData = db.users[username];
-        const currentPortfolioValue = userData.portfolio.reduce((acc, item) => {
-            const mStock = marketData.find(s => s.symbol === item.symbol);
-            return acc + (mStock ? mStock.price * item.amount : 0);
-        }, 0);
-        const totalWealth = userData.balance + currentPortfolioValue;
-        userData.wealthHistory = [...userData.wealthHistory, { time: new Date().toLocaleTimeString(), wealth: totalWealth }].slice(-30);
-        dbChanged = true;
-    });
-    if (dbChanged) writeDb(db);
+    try {
+        const db = readDb();
+        let dbChanged = false;
+        Object.keys(db.users).forEach(username => {
+            const userData = db.users[username];
+            const currentPortfolioValue = userData.portfolio.reduce((acc, item) => {
+                const mStock = marketData.find(s => s.symbol === item.symbol);
+                return acc + (mStock ? mStock.price * item.amount : 0);
+            }, 0);
+            const totalWealth = userData.balance + currentPortfolioValue;
+            userData.wealthHistory = [...userData.wealthHistory, { time: new Date().toLocaleTimeString(), wealth: totalWealth }].slice(-30);
+            dbChanged = true;
+        });
+        if (dbChanged) writeDb(db);
+    } catch (error) {
+        console.error('Varlık Geçmişi Güncelleme Hatası:', error);
+    }
 }, 10000);
 
 // API Endpoints

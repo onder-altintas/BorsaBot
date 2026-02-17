@@ -51,14 +51,14 @@ function App() {
   const totalProfit = totalWealth - initialWealth;
   const profitPercent = ((totalProfit / initialWealth) * 100).toFixed(2);
 
-  const handleBuy = (amount) => {
-    const result = buyStock(selectedStock.symbol, amount);
+  const handleBuy = async (amount) => {
+    const result = await buyStock(selectedStock.symbol, amount);
     if (result.success) setSelectedStock(null);
     else alert(result.message);
   };
 
-  const handleSell = (amount) => {
-    const result = sellStock(selectedStock.symbol, amount);
+  const handleSell = async (amount) => {
+    const result = await sellStock(selectedStock.symbol, amount);
     if (result.success) setSelectedStock(null);
     else alert(result.message);
   };

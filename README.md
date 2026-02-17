@@ -1,16 +1,48 @@
-# React + Vite
+# 📈 BorsaBot: BIST 100 Trading Simulator & Bot
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Bu proje, Borsa İstanbul (BIST 100) verilerini simüle eden, teknik analiz göstergeleri sunan ve otomatik trading botları ile işlem yapılmasına olanak sağlayan kapsamlı bir web uygulamasıdır.
 
-Currently, two official plugins are available:
+## 🚀 Öne Çıkan Özellikler
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### 1. Canlı Piyasa Simülasyonu
+- **Gerçekçi Veriler:** THYAO, ASELS, EREGL gibi 10 büyük BIST 100 hissesi için her 3 saniyede bir güncellenen fiyat simülasyonu.
+- **Teknik Göstergeler:** Her hisse için anlık **RSI (14)**, **SMA 5** ve **SMA 10** değerleri otomatik hesaplanır.
+- **Sinyal Üretimi:** Teknik verilere dayalı "GÜÇLÜ AL", "AL", "TUT", "SAT", "GÜÇLÜ SAT" önerileri.
 
-## React Compiler
+### 2. Çoklu Kullanıcı & Güvenlik
+- **Oturum Yönetimi:** `önder` ve `samet` kullanıcıları için şifreli (123) giriş sistemi.
+- **Veri İzolasyonu:** Her kullanıcının bakiyesi, portföyü ve işlem geçmişi tamamen birbirinden bağımsızdır (Multi-user Isolation).
+- **Session Persistence:** Tarayıcıyı kapatsanız bile oturumunuz açık kalır.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 3. Otomatik Trading Botları
+- **Strateji:** Botlar sadece "GÜÇLÜ AL" sinyalinde alım, "GÜÇLÜ SAT" sinyalinde satış yapar.
+- **Esneklik:** Her hisse için ayrı ayrı bot aktif edilebilir ve işlem adedi belirlenebilir.
+- **Arkaplan Çalışması:** Sunucu açık olduğu sürece botlar tüm kullanıcılar için simülasyonu takip eder.
 
-## Expanding the ESLint configuration
+### 4. Modern UI & UX
+- **Responsive Tasarım:** Mobil ve masaüstü uyumlu koyu tema (Dark Mode) arayüz.
+- **Dashboard:** Toplam varlık, kar/zarar durumu ve varlık gelişim grafiği (Recharts).
+- **İşlem Onayları:** Yapılan her işlem için kullanıcıya anlık geri bildirimler sağlanır.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 🛠️ Teknik Altyapı
+- **Frontend:** React 19, Vite, Lucide-React, Recharts, Vanilla CSS.
+- **Backend:** Node.js, Express, Cors.
+- **Veri Depolama:** JSON tabanlı yerel veritabanı (db.json) ile otomatik göç (migration) desteği.
+- **Dağıtım (Deployment):** Frontend Vercel'de, Backend Render üzerinde çalışacak şekilde yapılandırılmıştır.
+
+## ⚙️ Kurulum ve Çalıştırma
+
+### Yerel Geliştirme
+1. **Frontend:** `npm run dev` (Port: 5173)
+2. **Backend:** `cd server && npm run dev` (Port: 5000)
+
+### Dağıtım Ayarları
+- **Vercel Çevre Değişkeni:** `VITE_API_BASE_URL=https://borsabot.onrender.com/api`
+
+## 💎 Tamamlanan Kritik Düzeltmeler
+- Vercel üzerindeki "Permission Denied (126)" yetki hatası giderildi.
+- API bağlantısındaki 401 Unauthorized ve CORS kısıtlamaları aşıldı.
+- İnternet tarayıcılarının eski verileri göstermesini engelleyen "Cache Prevention" (timestamp) sistemi eklendi.
+
+---
+*Bu dosya projenin mevcut durumunu özetler. Yeni özellikler eklendikçe güncellenmelidir.*

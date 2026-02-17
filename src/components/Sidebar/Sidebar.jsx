@@ -25,6 +25,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
     { id: 'dashboard', label: 'Panel', icon: LayoutDashboard },
     { id: 'market', label: 'Borsa', icon: LineChart },
     { id: 'portfolio', label: 'Portföy', icon: Wallet },
+    { id: 'bots', label: 'Bot', icon: Settings },
     { id: 'history', label: 'Geçmiş', icon: History },
   ];
 

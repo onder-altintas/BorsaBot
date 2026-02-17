@@ -6,7 +6,7 @@
 
 .stock-table-header {
     display: grid;
-    grid-template-columns: 1.8fr 1.2fr 1.2fr 1fr 1.2fr 1.2fr 1.5fr 1fr;
+    grid-template-columns: 1.8fr 1.2fr 1.2fr 1fr 1.2fr 1.2fr 1fr;
     align-items: center;
     padding: 1rem 1.5rem;
     gap: 1rem;
@@ -18,7 +18,7 @@
 
 .stock-row {
     display: grid;
-    grid-template-columns: 1.8fr 1.2fr 1.2fr 1fr 1.2fr 1.2fr 1.5fr 1fr;
+    grid-template-columns: 1.8fr 1.2fr 1.2fr 1fr 1.2fr 1.2fr 1fr;
     padding: 1.25rem 1.5rem;
     align-items: center;
     gap: 1rem;
@@ -39,35 +39,6 @@
     text-align: center;
     display: inline-block;
     min-width: 80px;
-}
-
-.stock-bot-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    align-items: flex-start;
-}
-
-.bot-toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.bot-toggle input {
-    cursor: pointer;
-}
-
-.bot-amount-input {
-    width: 60px;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: var(--bg-card);
-    color: var(--text-primary);
-    font-size: 0.75rem;
 }
 
 .badge-strong-buy {

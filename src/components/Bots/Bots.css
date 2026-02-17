@@ -1,0 +1,43 @@
+.bots-container {
+    padding: 1rem;
+}
+
+.bots-header {
+    margin-bottom: 2rem;
+}
+
+.stock-bot-status .bot-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stock-bot-status .bot-toggle input[type="checkbox"] {
+    width: 1.2rem;
+    height: 1.2rem;
+    cursor: pointer;
+}
+
+.stock-bot-status .bot-toggle label {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.stock-bot-amount .bot-amount-input {
+    width: 80px;
+    padding: 0.4rem;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    color: white;
+    text-align: center;
+}
+
+.stock-bot-amount .bot-amount-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.bot-active-row {
+    background-color: rgba(59, 130, 246, 0.05);
+}

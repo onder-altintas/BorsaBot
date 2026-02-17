@@ -16,6 +16,7 @@ import {
   Line
 } from 'recharts';
 import History from './components/History/History';
+import Bots from './components/Bots/Bots';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -215,6 +216,14 @@ function App() {
 
           {activeTab === 'history' && (
             <History history={history} />
+          )}
+
+          {activeTab === 'bots' && (
+            <Bots
+              marketData={marketData}
+              botConfigs={botConfigs}
+              onUpdateBot={updateBotConfig}
+            />
           )}
         </section>
       </main>

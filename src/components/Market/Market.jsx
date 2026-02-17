@@ -17,7 +17,6 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                     <span>RSI (14)</span>
                     <span>SMA (5/10)</span>
                     <span>Öneri</span>
-                    <span>Bot</span>
                     <span>İşlem</span>
                 </div>
 
@@ -59,26 +58,6 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                                 <span className={`recommendation-badge ${recClass}`}>
                                     {recommendation}
                                 </span>
-                            </div>
-                            <div className="stock-bot-controls">
-                                <div className="bot-toggle">
-                                    <input
-                                        type="checkbox"
-                                        id={`bot-${stock.symbol}`}
-                                        checked={botConfig.active}
-                                        onChange={(e) => onUpdateBot(stock.symbol, { active: e.target.checked })}
-                                    />
-                                    <label htmlFor={`bot-${stock.symbol}`}>Bot</label>
-                                </div>
-                                {botConfig.active && (
-                                    <input
-                                        type="number"
-                                        className="bot-amount-input"
-                                        value={botConfig.amount}
-                                        min="1"
-                                        onChange={(e) => onUpdateBot(stock.symbol, { amount: parseInt(e.target.value) || 1 })}
-                                    />
-                                )}
                             </div>
                             <div className="stock-actions">
                                 <button

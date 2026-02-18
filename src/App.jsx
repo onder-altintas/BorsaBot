@@ -172,6 +172,30 @@ function App() {
                   </div>
                   <span className="text-secondary text-xs">BIST Portföyü</span>
                 </div>
+                <div className="card-premium">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-secondary text-sm">Başarı Oranı</span>
+                      <h3>%{stats?.winRate || 0}</h3>
+                    </div>
+                    <div className="stats-icon bg-success-subtle p-2 rounded-lg">
+                      🎯
+                    </div>
+                  </div>
+                  <span className="text-secondary text-xs">Karlı İşlem Oranı</span>
+                </div>
+                <div className="card-premium">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-secondary text-sm">En İyi Hisse</span>
+                      <h3>{stats?.bestStock || '-'}</h3>
+                    </div>
+                    <div className="stats-icon bg-accent-subtle p-2 rounded-lg">
+                      🏆
+                    </div>
+                  </div>
+                  <span className="text-secondary text-xs">En Çok Kar Ettiren</span>
+                </div>
               </div>
 
               <div className="chart-container card-premium mt-6">

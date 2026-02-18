@@ -8,7 +8,7 @@ export const useTrading = (currentUser) => {
     const [history, setHistory] = useState([]);
     const [marketData, setMarketData] = useState([]);
     const [wealthHistory, setWealthHistory] = useState([]);
-    const [botConfigs, setBotConfigs] = useState({});
+    const [stats, setStats] = useState({ winRate: 0, bestStock: '-', totalTrades: 0 });
     const [isConnected, setIsConnected] = useState(true);
 
     const fetchData = async () => {
@@ -38,6 +38,7 @@ export const useTrading = (currentUser) => {
                 setHistory(uData.history ?? []);
                 setWealthHistory(uData.wealthHistory ?? []);
                 setBotConfigs(uData.botConfigs ?? {});
+                setStats(uData.stats ?? { winRate: 0, bestStock: '-', totalTrades: 0 });
             }
         } catch (error) {
             console.error('Veri çekme hatası:', error);
@@ -122,6 +123,7 @@ export const useTrading = (currentUser) => {
         marketData,
         wealthHistory,
         botConfigs,
+        stats,
         isConnected,
         buyStock,
         sellStock,

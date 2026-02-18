@@ -15,7 +15,9 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                     <span>Anlık Fiyat</span>
                     <span>Öneri</span>
                     <span>Bot Durumu</span>
-                    <span>İşlem Adedi</span>
+                    <span>Adet</span>
+                    <span>Stop-Loss</span>
+                    <span>Take-Profit</span>
                 </div>
 
                 {marketData.map(stock => {
@@ -62,6 +64,26 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                                     value={botConfig.amount}
                                     min="1"
                                     onChange={(e) => onUpdateBot(stock.symbol, { amount: parseInt(e.target.value) || 1 })}
+                                    disabled={!botConfig.active}
+                                />
+                            </div>
+                            <div className="stock-bot-sl">
+                                <input
+                                    type="number"
+                                    className="bot-amount-input"
+                                    placeholder="Stop %"
+                                    value={botConfig.stopLoss || ''}
+                                    onChange={(e) => onUpdateBot(stock.symbol, { stopLoss: parseFloat(e.target.value) || 0 })}
+                                    disabled={!botConfig.active}
+                                />
+                            </div>
+                            <div className="stock-bot-tp">
+                                <input
+                                    type="number"
+                                    className="bot-amount-input"
+                                    placeholder="Kar %"
+                                    value={botConfig.takeProfit || ''}
+                                    onChange={(e) => onUpdateBot(stock.symbol, { takeProfit: parseFloat(e.target.value) || 0 })}
                                     disabled={!botConfig.active}
                                 />
                             </div>

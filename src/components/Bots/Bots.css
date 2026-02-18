@@ -1,9 +1,15 @@
-.bots-container {
-    padding: 1rem;
+.bots-container .stock-table-header {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr 1fr 0.8fr 0.8fr 0.8fr;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
 }
 
-.bots-header {
-    margin-bottom: 2rem;
+.bots-container .stock-row {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr 1fr 0.8fr 0.8fr 0.8fr;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
 }
 
 .stock-bot-status .bot-toggle {

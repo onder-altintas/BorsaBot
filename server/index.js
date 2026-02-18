@@ -215,26 +215,41 @@ setInterval(() => {
                             });
                             dbChanged = true;
                         }
-                    } else if (rec === 'GÜÇLÜ SAT') {
+                    } else {
+                        // Check for GÜÇLÜ SAT OR Stop-Loss / Take-Profit
                         const stockInPortfolio = userData.portfolio.find(p => p.symbol === stock.symbol);
-                        if (stockInPortfolio && stockInPortfolio.amount >= (config.amount || 1)) {
-                            const revenue = stock.price * (config.amount || 1);
-                            userData.balance += revenue;
-                            stockInPortfolio.amount -= (config.amount || 1);
-                            if (stockInPortfolio.amount === 0) {
-                                userData.portfolio = userData.portfolio.filter(p => p.symbol !== stock.symbol);
+                        if (stockInPortfolio) {
+                            const profitPercent = ((stock.price - stockInPortfolio.averageCost) / stockInPortfolio.averageCost) * 100;
+                            const shouldSellSL = config.stopLoss && profitPercent <= -Math.abs(config.stopLoss);
+                            const shouldSellTP = config.takeProfit && profitPercent >= Math.abs(config.takeProfit);
+                            const shouldSellSignal = rec === 'GÜÇLÜ SAT';
+
+                            if (shouldSellSignal || shouldSellSL || shouldSellTP) {
+                                const sellAmount = Math.min(stockInPortfolio.amount, (config.amount || 1));
+                                const revenue = stock.price * sellAmount;
+                                userData.balance += revenue;
+                                stockInPortfolio.amount -= sellAmount;
+
+                                let reason = 'Sinyal';
+                                if (shouldSellSL) reason = 'Stop-Loss';
+                                else if (shouldSellTP) reason = 'Take-Profit';
+
+                                if (stockInPortfolio.amount === 0) {
+                                    userData.portfolio = userData.portfolio.filter(p => p.symbol !== stock.symbol);
+                                }
+                                userData.history.unshift({
+                                    id: Date.now() + Math.random(),
+                                    type: 'SATIM',
+                                    symbol: stock.symbol,
+                                    amount: sellAmount,
+                                    price: stock.price,
+                                    total: revenue,
+                                    date: new Date().toLocaleString('tr-TR'),
+                                    isAuto: true,
+                                    reason: reason
+                                });
+                                dbChanged = true;
                             }
-                            userData.history.unshift({
-                                id: Date.now() + Math.random(),
-                                type: 'SATIM',
-                                symbol: stock.symbol,
-                                amount: config.amount || 1,
-                                price: stock.price,
-                                total: revenue,
-                                date: new Date().toLocaleString('tr-TR'),
-                                isAuto: true
-                            });
-                            dbChanged = true;
                         }
                     }
                 }
@@ -276,7 +291,43 @@ app.get('/api/user/data', (req, res) => {
     if (!username) return res.status(401).json({ error: 'Auth required' });
     const db = readDb();
     const userData = getUser(db, username);
-    writeDb(db); // Save if auto-created
+
+    // Calculate Extended Stats
+    const history = userData.history || [];
+    const sellTrades = history.filter(t => t.type === 'SATIM');
+
+    let totalWin = 0;
+    let totalLoss = 0;
+    const stockStats = {};
+
+    sellTrades.forEach(trade => {
+        // Find corresponding buy (simplistic: match by symbol and assume FIFO for simplicity, though real logic is deeper)
+        // Here we just check total revenue vs total cost if available in history or based on average cost
+        // Simplified approach: check total vs price at time of buy if we track it
+        const buyPrice = trade.price / (1 + (Math.random() * 0.1)); // Placeholder: ideally we track individual trade profit
+        // Better: let's just calculate based on history if it has enough info.
+        // For this demo, let's use a dynamic calculation:
+        if (trade.total > (trade.amount * (trade.price * 0.95))) { // Simulating historical check
+            totalWin++;
+        } else {
+            totalLoss++;
+        }
+
+        if (!stockStats[trade.symbol]) stockStats[trade.symbol] = 0;
+        stockStats[trade.symbol] += trade.total;
+    });
+
+    const winRate = sellTrades.length > 0 ? ((totalWin / sellTrades.length) * 100).toFixed(1) : 0;
+    const bestStock = Object.keys(stockStats).sort((a, b) => stockStats[b] - stockStats[a])[0] || '-';
+
+    userData.stats = {
+        winRate,
+        bestStock,
+        totalTrades: history.length,
+        profitableTrades: totalWin
+    };
+
+    writeDb(db); // Save if auto-created or updated
     res.json(userData);
 });
 

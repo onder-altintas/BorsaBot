@@ -34,6 +34,7 @@ const getInitialUserData = (username) => ({
 
 // Migration Helper (Optional: Run once if needed)
 async function migrateFromJson() {
+    if (mongoose.connection.readyState !== 1) return;
     const DB_PATH = path.join(__dirname, 'db.json');
     if (fs.existsSync(DB_PATH)) {
         console.log('📦 db.json bulundu, veri göçü başlıyor...');
@@ -47,13 +48,13 @@ async function migrateFromJson() {
                     console.log(`✅ ${username} göç ettirildi.`);
                 }
             }
-            // fs.renameSync(DB_PATH, DB_PATH + '.bak');
         } catch (e) {
             console.error('❌ Göç hatası:', e);
         }
     }
 }
-migrateFromJson();
+// Run migration when connection is ready
+mongoose.connection.once('connected', migrateFromJson);
 
 // BIST 100 Major Stocks
 const BIST_STOCK_SYMBOLS = [
@@ -184,7 +185,9 @@ setInterval(async () => {
             };
         });
 
-        // 2. Execute Bots and Wealth History for ALL Active Users in MongoDB
+        // 2. Execute DB Operations ONLY if connected
+        if (mongoose.connection.readyState !== 1) return;
+
         const allUsers = await User.find({});
         for (let user of allUsers) {
             let dbChanged = false;

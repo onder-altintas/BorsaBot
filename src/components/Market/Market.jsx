@@ -50,14 +50,14 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                             </div>
                             <div className="stock-bb text-xs text-secondary">
                                 <div className={stock.price >= stock.indicators?.bollinger?.upper ? 'text-error' : ''}>
-                                    {stock.indicators?.bollinger?.upper.toFixed(1)}
+                                    {stock.indicators?.bollinger?.upper?.toFixed(1) || '0.0'}
                                 </div>
                                 <div className={stock.price <= stock.indicators?.bollinger?.lower ? 'text-success' : ''}>
-                                    {stock.indicators?.bollinger?.lower.toFixed(1)}
+                                    {stock.indicators?.bollinger?.lower?.toFixed(1) || '0.0'}
                                 </div>
                             </div>
-                            <div className={`stock-macd font-bold text-xs ${stock.indicators?.macd?.line >= 0 ? 'text-success' : 'text-error'}`}>
-                                {stock.indicators?.macd?.line.toFixed(2)}
+                            <div className={`stock-macd font-bold text-xs ${(stock.indicators?.macd?.line || 0) >= 0 ? 'text-success' : 'text-error'}`}>
+                                {stock.indicators?.macd?.line?.toFixed(2) || '0.00'}
                             </div>
                             <div className="stock-recommendation">
                                 <span className={`recommendation-badge ${recClass}`}>

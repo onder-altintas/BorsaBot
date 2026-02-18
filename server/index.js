@@ -80,7 +80,14 @@ let marketData = BIST_STOCK_SYMBOLS.map(stock => ({
     change: 0,
     changePercent: 0,
     priceHistory: [{ time: new Date().toLocaleTimeString(), price: stock.basePrice }],
-    indicators: { sma5: stock.basePrice, sma10: stock.basePrice, rsi: 50, recommendation: 'TUT' }
+    indicators: {
+        sma5: stock.basePrice,
+        sma10: stock.basePrice,
+        rsi: 50,
+        recommendation: 'TUT',
+        macd: { line: 0, signal: 0, hist: 0 },
+        bollinger: { upper: stock.basePrice, middle: stock.basePrice, lower: stock.basePrice }
+    }
 }));
 
 const calculateEMA = (data, period) => {

@@ -1,72 +1,72 @@
 # 📈 BorsaBot: BIST 100 Trading Simulator & Bot
 
-Bu proje, Borsa İstanbul (BIST 100) verilerini simüle eden, teknik analiz göstergeleri sunan ve otomatik trading botları ile işlem yapılmasına olanak sağlayan kapsamlı bir web uygulamasıdır.
-
-## 🔐 Erişim Bilgileri (Giriş)
-Uygulama çoklu kullanıcı desteği sunar. Aşağıdaki bilgilerle giriş yapabilirsiniz:
-
-| Kullanıcı Adı | Şifre | Yetki |
-| :--- | :--- | :--- |
-| **önder** | 123 | Full Access (Default) |
-| **samet** | 123 | Full Access |
+Bu proje, Borsa İstanbul (BIST 100) verilerini simüle eden, gelişmiş teknik analiz göstergeleri sunan ve bulut tabanlı veritabanı ile verileri kalıcı olarak saklayan profesyonel bir trading simülasyonudur.
 
 ---
 
-## 🌐 Canlı Sistem Linkleri
-| Bileşen | Servis | Link |
+## 🌐 Canlı Sistem Bilgileri
+| Bileşen | Servis | Durum |
 | :--- | :--- | :--- |
-| **Frontend** | Vercel | [https://borsabot.vercel.app](https://borsabot.vercel.app) |
-| **Backend API** | Render | [https://borsabot.onrender.com](https://borsabot.onrender.com) |
-| **Kaynak Kod** | GitHub | [https://github.com/onder-altintas/BorsaBot](https://github.com/onder-altintas/BorsaBot) |
+| **Frontend** | Vercel | [Canlı Sitede Görüntüle](https://borsabot.vercel.app) |
+| **Veritabanı** | MongoDB Atlas | Bulut Tabanlı (Kalıcı) |
+| **Kaynak Kod** | GitHub | [GitHub Repository](https://github.com/onder-altintas/BorsaBot) |
 
 ---
 
 ## 🚀 Öne Çıkan Özellikler
 
-### 1. Canlı Piyasa Simülasyonu
-- **Gerçekçi Veriler:** 10 büyük BIST 100 hissesi için her 3 saniyede bir güncellenen fiyat simülasyonu.
-- **Teknik Göstergeler:** Anlık **RSI (14)**, **SMA 5** ve **SMA 10** değerleri otomatik hesaplanır.
-- **Sinyaller:** Teknik verilere dayalı "GÜÇLÜ AL", "AL", "TUT", "SAT", "GÜÇLÜ SAT" önerileri.
+### 1. Gelişmiş Piyasa Analizi
+- **Canlı Simülasyon:** 10 büyük BIST 100 hissesi için gerçek zamanlı fiyat hareketleri.
+- **Profesyonel Göstergeler:**
+  - **MACD (12, 26, 9):** Trend yönü ve momentum takibi.
+  - **Bollinger Bantları (20, 2):** Volatilite ve aşırı alım/satım bölgeleri.
+  - **RSI (14) & SMA (5, 10):** Temel teknik analiz desteği.
+- **Sinyal Motoru:** Tüm göstergeleri harmanlayan dinamik "GÜÇLÜ AL" / "GÜÇLÜ SAT" kararları.
 
-### 2. Çoklu Kullanıcı & Güvenlik
-- **Veri İzolasyonu:** Her kullanıcının bakiyesi, portföyü ve işlem geçmişi tamamen bağımsızdır.
-- **Kalıcı Oturum:** `localStorage` entegrasyonu ile kapanmayan oturum yapısı.
+### 2. Premium UI/UX (Glassmorphism)
+- **Modern Tasarım:** Karanlık mod tabanlı, cam efekti (glassmorphism) ve yumuşak geçişler.
+- **Tipografi:** Okunabilirliği yüksek 'Outfit' Google Font entegrasyonu.
+- **Dashboard:** Anlık varlık gelişimi grafiği, win-rate hesaplaması ve "En İyi Hisse" istatistiği.
 
-### 3. Otomatik Trading Botları
-- **Strateji:** Botlar sadece "GÜÇLÜ AL" sinyalinde alım, "GÜÇLÜ SAT" sinyalinde satış yapar.
-- **Arkaplan Çalışması:** Sunucu açık olduğu sürece botlar tüm kullanıcılar için simülasyonu takip eder.
+### 3. Akıllı Trading Botları
+- **SL/TP Yönetimi:** Her bot için özel **Stop-Loss** ve **Take-Profit** seviyeleri tanımlanabilir.
+- **Otomatik İşlem:** Botlar, belirlenen stratejiye göre kullanıcı adına 7/24 (sunucu açıkken) işlem yapar.
+- **Bulut Senkronizasyonu:** Bot ayarları MongoDB üzerinden her kullanıcı için bağımsız ve kalıcıdır.
 
 ---
 
-## 🛠️ Teknik Altyapı & Ortam Değişkenleri
+## 🛠️ Teknik Altyapı & Kurulum
 
-### Ortam Değişkenleri (Environment Variables)
-Frontend'in backend ile iletişim kurabilmesi için Vercel veya yerel ortamda aşağıdaki değişkenin tanımlı olması gerekir:
+### Kritik Ortam Değişkenleri (Environment Variables)
+Uygulamanın çalışması için aşağıdaki değişkenlerin tanımlanması **şarttır**:
 
+**Backend (.env):**
 ```env
-VITE_API_BASE_URL=https://borsabot.onrender.com/api
+PORT=5000
+MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/borsabot
 ```
 
-### Kurulum ve Çalıştırma
-1. **Frontend:** `npm run dev` (Local: `http://localhost:5173`)
-2. **Backend:** `cd server && npm run dev` (Local: `http://localhost:5000`)
+**Frontend (.env):**
+```env
+VITE_API_BASE_URL=http://localhost:5000/api  # Yerelde
+# Veya Vercel'deki Backend URL'niz
+```
 
----
-
-## 💎 Kritik Düzeltmeler (Geçmiş)
-- **Yetki (126):** Vercel'deki `Permission Denied` hatası Git index'i sıfırlanarak ve `.gitignore` UTF-8 yapılarak çözüldü.
-- **Önbellek (Cache):** Verilerin donmaması için API isteklerine `?t=timestamp` parametresi eklendi.
-- **CORS:** Backend, `x-user` özel header'ına izin verecek şekilde yapılandırıldı.
+### Kurulum
+1. **Server:** `cd server && npm install && node index.js`
+2. **Frontend:** `npm install && npm run dev`
 
 ---
 
 ## 🤖 Yapay Zeka Devir Notları (AI Handoff)
-*Bu projeyi devralan AI asistanı için teknik notlar:*
+*Bu projeyi devralan AI asistanı veya geliştiriciler için kritik teknik bilgiler:*
 
-- **Veritabanı:** `server/db.json` dosyasında `users` objesi altında kullanıcı bazlı tutulur.
-- **Header:** Frontend her istekte `x-user` başlığı ile kullanıcı adını gönderir, Backend bu başlığa göre veri döner.
-- **Simülasyon:** `server/index.js` içindeki `setInterval` blokları merkezi fiyat motorudur ve botları tetikler.
-- **Dikkat:** Veri tipi çakışmalarını önlemek için `App.jsx` içinde `Array.isArray(portfolio)` gibi korumalar mevcuttur.
+- **Veritabanı (Faz 3):** `db.json` devri kapandı. Artık `mongoose` ve MongoDB Atlas kullanılıyor. Şemalar `server/models/User.js` içindedir.
+- **Simülasyon Motoru:** `server/index.js` içindeki asenkron `setInterval` bloğu hem market fiyatlarını belirler hem de veritabanındaki tüm kullanıcıların botlarını tetikler.
+- **Güvenlik & Auth:** JWT yerine basitlik için `x-user` header yapısı kullanılmıştır. Frontend her istekte bu başlığı gönderir.
+- **Veri Göçü (Migration):** Sunucuda `migrateFromJson()` fonksiyonu mevcuttur; eğer yerelde bir `db.json` bulursa onları otomatik olarak bulut veritabanına taşır.
+- **Bağlantı Robustness:** Sunucu, MongoDB bağlantısı kopsa bile market verilerini stream etmeye devam edecek şekilde (resilient) tasarlanmıştır.
 
 ---
-*Gelecek Geliştirmeler:* Daha fazla teknik gösterge (MACD, Bollinger), gelişmiş kullanıcı profili, gerçek borsa API entegrasyonu.
+*Geliştirici:* Önder Altıntaş | **BorsaBot v2.0 - Cloud Edition**
+

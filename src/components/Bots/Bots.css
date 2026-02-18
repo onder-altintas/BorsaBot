@@ -24,20 +24,26 @@
 }
 
 .stock-bot-amount .bot-amount-input {
-    width: 80px;
-    padding: 0.4rem;
-    background: #1e293b;
-    border: 1px solid #334155;
-    border-radius: 4px;
-    color: white;
+    width: 90px;
+    padding: 0.5rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
     text-align: center;
+    font-weight: 600;
+}
+
+.stock-bot-amount .bot-amount-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
 }
 
 .stock-bot-amount .bot-amount-input:disabled {
-    opacity: 0.5;
+    opacity: 0.3;
     cursor: not-allowed;
 }
 
 .bot-active-row {
-    background-color: rgba(59, 130, 246, 0.05);
+    background-color: var(--success-bg);
 }

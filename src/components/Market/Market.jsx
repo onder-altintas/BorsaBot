@@ -13,9 +13,10 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                 <div className="stock-table-header">
                     <span>Sembol</span>
                     <span>Fiyat</span>
-                    <span>Günlük Değişim</span>
-                    <span>RSI (14)</span>
-                    <span>SMA (5/10)</span>
+                    <span>Değişim</span>
+                    <span>RSI</span>
+                    <span>BB (Üst/Alt)</span>
+                    <span>MACD</span>
                     <span>Öneri</span>
                     <span>İşlem</span>
                 </div>
@@ -47,12 +48,16 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                             <div className={`stock-rsi font-bold ${rsiColor}`}>
                                 {rsiValue.toFixed(1)}
                             </div>
-                            <div className="stock-sma text-sm text-secondary">
-                                <span className={stock.price > stock.indicators?.sma5 ? 'text-success' : 'text-error'}>
-                                    {stock.indicators?.sma5.toFixed(1)}
-                                </span>
-                                <span className="mx-1">/</span>
-                                <span>{stock.indicators?.sma10.toFixed(1)}</span>
+                            <div className="stock-bb text-xs text-secondary">
+                                <div className={stock.price >= stock.indicators?.bollinger?.upper ? 'text-error' : ''}>
+                                    {stock.indicators?.bollinger?.upper.toFixed(1)}
+                                </div>
+                                <div className={stock.price <= stock.indicators?.bollinger?.lower ? 'text-success' : ''}>
+                                    {stock.indicators?.bollinger?.lower.toFixed(1)}
+                                </div>
+                            </div>
+                            <div className={`stock-macd font-bold text-xs ${stock.indicators?.macd?.line >= 0 ? 'text-success' : 'text-error'}`}>
+                                {stock.indicators?.macd?.line.toFixed(2)}
                             </div>
                             <div className="stock-recommendation">
                                 <span className={`recommendation-badge ${recClass}`}>

@@ -132,46 +132,76 @@ function App() {
             <div className="fade-in">
               <h2 className="mb-6">Yatırımcı Paneli</h2>
               <div className="stats-grid">
-                <div className="card">
-                  <span className="text-secondary text-sm">Nakit Bakiye</span>
-                  <h3>₺{balance.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</h3>
-                  <span className="text-secondary text-sm">Kullanılabilir Tutar</span>
+                <div className="card-premium">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-secondary text-sm">Nakit Bakiye</span>
+                      <h3>₺{balance.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</h3>
+                    </div>
+                    <div className="stats-icon bg-accent-subtle p-2 rounded-lg">
+                      💰
+                    </div>
+                  </div>
+                  <span className="text-secondary text-xs">Kullanılabilir Tutar</span>
                 </div>
-                <div className="card">
-                  <span className="text-secondary text-sm">Toplam Kar/Zarar</span>
-                  <h3 className={totalProfit >= 0 ? 'text-success' : 'text-error'}>
-                    {totalProfit >= 0 ? '+' : ''}₺{totalProfit.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                  </h3>
+                <div className="card-premium">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-secondary text-sm">Toplam Kar/Zarar</span>
+                      <h3 className={totalProfit >= 0 ? 'text-success' : 'text-error'}>
+                        {totalProfit >= 0 ? '+' : ''}₺{totalProfit.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                      </h3>
+                    </div>
+                    <div className={`stats-icon p-2 rounded-lg ${totalProfit >= 0 ? 'bg-success-subtle' : 'bg-error-subtle'}`}>
+                      📈
+                    </div>
+                  </div>
                   <span className={`text-sm font-bold ${totalProfit >= 0 ? 'text-success' : 'text-error'}`}>
                     {totalProfit >= 0 ? '+' : ''}{profitPercent}%
                   </span>
                 </div>
-                <div className="card">
-                  <span className="text-secondary text-sm">Aktif Pozisyonlar</span>
-                  <h3>{portfolio.length} Hisse</h3>
-                  <span className="text-secondary text-sm">BIST Portföyü</span>
+                <div className="card-premium">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-secondary text-sm">Aktif Pozisyonlar</span>
+                      <h3>{portfolio.length} Hisse</h3>
+                    </div>
+                    <div className="stats-icon bg-accent-subtle p-2 rounded-lg">
+                      💼
+                    </div>
+                  </div>
+                  <span className="text-secondary text-xs">BIST Portföyü</span>
                 </div>
               </div>
 
-              <div className="chart-container card mt-6">
-                <h4 className="mb-6">Varlık Gelişimi</h4>
+              <div className="chart-container card-premium mt-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h4>Varlık Gelişimi</h4>
+                  <div className="badge-hold rounded-full px-3 py-1 text-xs">Canlı Takip</div>
+                </div>
                 <div style={{ width: '100%', height: 300 }}>
                   <ResponsiveContainer>
                     <AreaChart data={wealthHistory}>
                       <defs>
                         <linearGradient id="colorWealth" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
                           <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <Tooltip
-                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
+                        contentStyle={{
+                          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '12px',
+                          backdropFilter: 'blur(8px)'
+                        }}
                         itemStyle={{ color: '#f8fafc' }}
                       />
                       <Area
                         type="monotone"
                         dataKey="wealth"
                         stroke="#3b82f6"
+                        strokeWidth={4}
                         fillOpacity={1}
                         fill="url(#colorWealth)"
                       />
@@ -180,15 +210,15 @@ function App() {
                 </div>
               </div>
 
-              <div className="card mt-6">
+              <div className="card-premium mt-6">
                 <h4 className="mb-4">Hızlı Takip (BIST 100)</h4>
                 <div className="quick-market">
                   {marketData.slice(0, 4).map(stock => (
-                    <div key={stock.symbol} className="quick-item">
+                    <div key={stock.symbol} className="quick-item glass">
                       <span className="font-bold">{stock.symbol}</span>
                       <span className="font-bold">₺{stock.price}</span>
                       <span className={stock.change >= 0 ? 'text-success' : 'text-error'}>
-                        %{stock.changePercent}
+                        {stock.change >= 0 ? '▲' : '▼'} %{stock.changePercent}
                       </span>
                     </div>
                   ))}

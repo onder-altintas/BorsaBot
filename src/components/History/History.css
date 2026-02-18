@@ -40,13 +40,13 @@
 }
 
 .badge-auto {
-    background-color: var(--primary-bg);
-    color: var(--primary);
+    background-color: var(--accent-subtle);
+    color: var(--accent-primary);
     padding: 0.25rem 0.6rem;
     border-radius: 99px;
     font-size: 0.7rem;
     font-weight: 700;
-    border: 1px solid var(--primary);
+    border: 1px solid var(--accent-primary);
 }
 
 .flex {

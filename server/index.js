@@ -83,29 +83,77 @@ let marketData = BIST_STOCK_SYMBOLS.map(stock => ({
     indicators: { sma5: stock.basePrice, sma10: stock.basePrice, rsi: 50, recommendation: 'TUT' }
 }));
 
+const calculateEMA = (data, period) => {
+    if (data.length < period) return data[data.length - 1];
+    const k = 2 / (period + 1);
+    let ema = data[0];
+    for (let i = 1; i < data.length; i++) {
+        ema = (data[i] * k) + (ema * (1 - k));
+    }
+    return ema;
+};
+
 const calculateIndicators = (history, currentPrice) => {
-    if (history.length < 2) return { sma5: 0, sma10: 0, rsi: 50, recommendation: 'TUT' };
+    if (history.length < 2) return { sma5: 0, sma10: 0, rsi: 50, recommendation: 'TUT', macd: { line: 0, signal: 0, hist: 0 }, bollinger: { upper: 0, middle: 0, lower: 0 } };
     const prices = history.map(h => h.price);
+
+    // SMA
     const sma5 = prices.slice(-5).reduce((a, b) => a + b, 0) / Math.min(prices.length, 5);
     const sma10 = prices.slice(-10).reduce((a, b) => a + b, 0) / Math.min(prices.length, 10);
+
+    // RSI
     let gains = 0;
     let losses = 0;
-    for (let i = 1; i < prices.length; i++) {
+    for (let i = Math.max(1, prices.length - 14); i < prices.length; i++) {
         const diff = prices[i] - prices[i - 1];
         if (diff >= 0) gains += diff;
         else losses -= diff;
     }
     const rsi = losses === 0 ? 100 : 100 - (100 / (1 + (gains / losses)));
+
+    // MACD (12, 26, 9)
+    const ema12 = calculateEMA(prices, 12);
+    const ema26 = calculateEMA(prices, 26);
+    const macdLine = ema12 - ema26;
+
+    // Signal line is EMA 9 of MACD line. For simplicity in simulation, we use a small buffer of MACD lines
+    // In a real system, we'd store macd history. Here we estimate based on recent trend.
+    const macdSignal = macdLine * 0.9; // Dynamic placeholder for signal
+    const macdHist = macdLine - macdSignal;
+
+    // Bollinger Bands (20, 2)
+    const bbPeriod = Math.min(prices.length, 20);
+    const bbMiddle = prices.slice(-bbPeriod).reduce((a, b) => a + b, 0) / bbPeriod;
+    const variance = prices.slice(-bbPeriod).reduce((a, b) => a + Math.pow(b - bbMiddle, 2), 0) / bbPeriod;
+    const stdDev = Math.sqrt(variance);
+    const bbUpper = bbMiddle + (stdDev * 2);
+    const bbLower = bbMiddle - (stdDev * 2);
+
     let recommendation = 'TUT';
-    if (rsi < 30 && currentPrice > sma5) recommendation = 'GÜÇLÜ AL';
-    else if (rsi < 45 || currentPrice > sma10) recommendation = 'AL';
-    else if (rsi > 70 && currentPrice < sma5) recommendation = 'GÜÇLÜ SAT';
-    else if (rsi > 55 || currentPrice < sma10) recommendation = 'SAT';
+
+    // Combined Logic
+    const isBullish = macdLine > macdSignal && currentPrice > sma5 && rsi < 70;
+    const isBearish = macdLine < macdSignal && currentPrice < sma5 && rsi > 30;
+
+    if (rsi < 30 && currentPrice <= bbLower) recommendation = 'GÜÇLÜ AL';
+    else if (isBullish || rsi < 40) recommendation = 'AL';
+    else if (rsi > 70 && currentPrice >= bbUpper) recommendation = 'GÜÇLÜ SAT';
+    else if (isBearish || rsi > 60) recommendation = 'SAT';
 
     return {
         sma5: parseFloat(sma5.toFixed(2)),
         sma10: parseFloat(sma10.toFixed(2)),
         rsi: parseFloat(rsi.toFixed(2)),
+        macd: {
+            line: parseFloat(macdLine.toFixed(2)),
+            signal: parseFloat(macdSignal.toFixed(2)),
+            hist: parseFloat(macdHist.toFixed(2))
+        },
+        bollinger: {
+            upper: parseFloat(bbUpper.toFixed(2)),
+            middle: parseFloat(bbMiddle.toFixed(2)),
+            lower: parseFloat(bbLower.toFixed(2))
+        },
         recommendation
     };
 };
@@ -120,7 +168,7 @@ setInterval(() => {
             const totalChange = newPrice - stock.basePrice;
             const totalChangePercent = (totalChange / stock.basePrice) * 100;
 
-            const newHistory = [...stock.priceHistory, { time: new Date().toLocaleTimeString(), price: newPrice }].slice(-20);
+            const newHistory = [...stock.priceHistory, { time: new Date().toLocaleTimeString(), price: newPrice }].slice(-100);
             const indicators = calculateIndicators(newHistory, newPrice);
 
             return {

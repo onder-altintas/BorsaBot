@@ -1,10 +1,18 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const mongoose = require('mongoose');
+const User = require('./models/User');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// MongoDB Connection
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log('✅ MongoDB Atlas Bağlantısı Başarılı'))
+    .catch(err => console.error('❌ MongoDB Bağlantı Hatası:', err));
 
 app.use(cors({
     origin: '*',
@@ -13,52 +21,39 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Database setup (multi-user structure)
-const DB_PATH = path.join(__dirname, 'db.json');
-
-const createUserData = () => ({
+// Helper for initial user
+const getInitialUserData = (username) => ({
+    username,
     balance: 100000.00,
     portfolio: [],
     history: [],
     wealthHistory: [{ time: new Date().toLocaleTimeString(), wealth: 100000 }],
-    botConfigs: {}
+    botConfigs: {},
+    stats: { winRate: 0, bestStock: '-', totalTrades: 0, profitableTrades: 0 }
 });
 
-function readDb() {
-    if (!fs.existsSync(DB_PATH)) {
-        const initial = { users: {} };
-        fs.writeFileSync(DB_PATH, JSON.stringify(initial, null, 2));
-        return initial;
-    }
-    const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-
-    // Migration: If old format exists, move to 'users.önder'
-    if (!data.users) {
-        const oldData = { ...data };
-        const migrated = {
-            users: {
-                'önder': oldData
+// Migration Helper (Optional: Run once if needed)
+async function migrateFromJson() {
+    const DB_PATH = path.join(__dirname, 'db.json');
+    if (fs.existsSync(DB_PATH)) {
+        console.log('📦 db.json bulundu, veri göçü başlıyor...');
+        try {
+            const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+            const usersList = data.users || {};
+            for (const username in usersList) {
+                const existing = await User.findOne({ username });
+                if (!existing) {
+                    await User.create({ username, ...usersList[username] });
+                    console.log(`✅ ${username} göç ettirildi.`);
+                }
             }
-        };
-        // Clean up root level
-        delete migrated.users['önder'].users;
-        writeDb(migrated);
-        return migrated;
+            // fs.renameSync(DB_PATH, DB_PATH + '.bak');
+        } catch (e) {
+            console.error('❌ Göç hatası:', e);
+        }
     }
-    return data;
 }
-
-function writeDb(data) {
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-}
-
-function getUser(db, username) {
-    if (!username) return null;
-    if (!db.users[username]) {
-        db.users[username] = createUserData();
-    }
-    return db.users[username];
-}
+migrateFromJson();
 
 // BIST 100 Major Stocks
 const BIST_STOCK_SYMBOLS = [
@@ -166,8 +161,9 @@ const calculateIndicators = (history, currentPrice) => {
 };
 
 // Simulation Engine: Runs every 3 seconds
-setInterval(() => {
+setInterval(async () => {
     try {
+        // 1. Update Market Data
         marketData = marketData.map(stock => {
             const volatility = 0.002;
             const change = (Math.random() - 0.5) * 2 * volatility * stock.price;
@@ -188,29 +184,32 @@ setInterval(() => {
             };
         });
 
-        // Execute Bots for ALL Users
-        const db = readDb();
-        let dbChanged = false;
+        // 2. Execute Bots and Wealth History for ALL Active Users in MongoDB
+        const allUsers = await User.find({});
+        for (let user of allUsers) {
+            let dbChanged = false;
 
-        Object.keys(db.users).forEach(username => {
-            const userData = db.users[username];
-            marketData.forEach(stock => {
-                const config = userData.botConfigs[stock.symbol];
+            // Execute Bots
+            const botConfigs = user.botConfigs || new Map();
+            for (let [symbol, config] of botConfigs) {
                 if (config && config.active) {
+                    const stock = marketData.find(s => s.symbol === symbol);
+                    if (!stock) continue;
+
                     const rec = stock.indicators?.recommendation;
                     if (rec === 'GÜÇLÜ AL') {
                         const cost = stock.price * (config.amount || 1);
-                        if (userData.balance >= cost) {
-                            userData.balance -= cost;
-                            const existing = userData.portfolio.find(p => p.symbol === stock.symbol);
+                        if (user.balance >= cost) {
+                            user.balance -= cost;
+                            const existing = user.portfolio.find(p => p.symbol === stock.symbol);
                             if (existing) {
                                 const totalOwned = existing.amount + (config.amount || 1);
                                 existing.averageCost = (existing.averageCost * existing.amount + cost) / totalOwned;
                                 existing.amount = totalOwned;
                             } else {
-                                userData.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: stock.price });
+                                user.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: stock.price });
                             }
-                            userData.history.unshift({
+                            user.history.unshift({
                                 id: Date.now() + Math.random(),
                                 type: 'ALIM',
                                 symbol: stock.symbol,
@@ -224,7 +223,7 @@ setInterval(() => {
                         }
                     } else {
                         // Check for GÜÇLÜ SAT OR Stop-Loss / Take-Profit
-                        const stockInPortfolio = userData.portfolio.find(p => p.symbol === stock.symbol);
+                        const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
                         if (stockInPortfolio) {
                             const profitPercent = ((stock.price - stockInPortfolio.averageCost) / stockInPortfolio.averageCost) * 100;
                             const shouldSellSL = config.stopLoss && profitPercent <= -Math.abs(config.stopLoss);
@@ -234,7 +233,7 @@ setInterval(() => {
                             if (shouldSellSignal || shouldSellSL || shouldSellTP) {
                                 const sellAmount = Math.min(stockInPortfolio.amount, (config.amount || 1));
                                 const revenue = stock.price * sellAmount;
-                                userData.balance += revenue;
+                                user.balance += revenue;
                                 stockInPortfolio.amount -= sellAmount;
 
                                 let reason = 'Sinyal';
@@ -242,9 +241,9 @@ setInterval(() => {
                                 else if (shouldSellTP) reason = 'Take-Profit';
 
                                 if (stockInPortfolio.amount === 0) {
-                                    userData.portfolio = userData.portfolio.filter(p => p.symbol !== stock.symbol);
+                                    user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
                                 }
-                                userData.history.unshift({
+                                user.history.unshift({
                                     id: Date.now() + Math.random(),
                                     type: 'SATIM',
                                     symbol: stock.symbol,
@@ -260,165 +259,173 @@ setInterval(() => {
                         }
                     }
                 }
-            });
-        });
+            }
 
-        if (dbChanged) writeDb(db);
+            // 3. Update Wealth History
+            const currentPortfolioValue = user.portfolio.reduce((acc, item) => {
+                const mStock = marketData.find(s => s.symbol === item.symbol);
+                return acc + (mStock ? mStock.price * item.amount : 0);
+            }, 0);
+            const totalWealth = user.balance + currentPortfolioValue;
+            user.wealthHistory = [...user.wealthHistory, { time: new Date().toLocaleTimeString(), wealth: totalWealth }].slice(-50);
+
+            // Auto-Save
+            await user.save();
+        }
     } catch (error) {
         console.error('Simülasyon Hatası:', error);
     }
 }, 3000);
 
-// wealth history update every 10 seconds
-setInterval(() => {
-    try {
-        const db = readDb();
-        let dbChanged = false;
-        Object.keys(db.users).forEach(username => {
-            const userData = db.users[username];
-            const currentPortfolioValue = userData.portfolio.reduce((acc, item) => {
-                const mStock = marketData.find(s => s.symbol === item.symbol);
-                return acc + (mStock ? mStock.price * item.amount : 0);
-            }, 0);
-            const totalWealth = userData.balance + currentPortfolioValue;
-            userData.wealthHistory = [...userData.wealthHistory, { time: new Date().toLocaleTimeString(), wealth: totalWealth }].slice(-30);
-            dbChanged = true;
-        });
-        if (dbChanged) writeDb(db);
-    } catch (error) {
-        console.error('Varlık Geçmişi Güncelleme Hatası:', error);
-    }
-}, 10000);
-
 // API Endpoints
 app.get('/api/market', (req, res) => res.json(marketData));
 
-app.get('/api/user/data', (req, res) => {
-    const username = req.headers['x-user'];
+app.get('/api/user/data', async (req, res) => {
+    const username = req.headers['x-user']?.toLowerCase();
     if (!username) return res.status(401).json({ error: 'Auth required' });
-    const db = readDb();
-    const userData = getUser(db, username);
 
-    // Calculate Extended Stats
-    const history = userData.history || [];
-    const sellTrades = history.filter(t => t.type === 'SATIM');
-
-    let totalWin = 0;
-    let totalLoss = 0;
-    const stockStats = {};
-
-    sellTrades.forEach(trade => {
-        // Find corresponding buy (simplistic: match by symbol and assume FIFO for simplicity, though real logic is deeper)
-        // Here we just check total revenue vs total cost if available in history or based on average cost
-        // Simplified approach: check total vs price at time of buy if we track it
-        const buyPrice = trade.price / (1 + (Math.random() * 0.1)); // Placeholder: ideally we track individual trade profit
-        // Better: let's just calculate based on history if it has enough info.
-        // For this demo, let's use a dynamic calculation:
-        if (trade.total > (trade.amount * (trade.price * 0.95))) { // Simulating historical check
-            totalWin++;
-        } else {
-            totalLoss++;
+    try {
+        let user = await User.findOne({ username });
+        if (!user) {
+            user = await User.create(getInitialUserData(username));
         }
 
-        if (!stockStats[trade.symbol]) stockStats[trade.symbol] = 0;
-        stockStats[trade.symbol] += trade.total;
-    });
+        // Calculate Extended Stats
+        const history = user.history || [];
+        const sellTrades = history.filter(t => t.type === 'SATIM');
 
-    const winRate = sellTrades.length > 0 ? ((totalWin / sellTrades.length) * 100).toFixed(1) : 0;
-    const bestStock = Object.keys(stockStats).sort((a, b) => stockStats[b] - stockStats[a])[0] || '-';
+        let totalWin = 0;
+        const stockStats = {};
 
-    userData.stats = {
-        winRate,
-        bestStock,
-        totalTrades: history.length,
-        profitableTrades: totalWin
-    };
+        sellTrades.forEach(trade => {
+            if (trade.total > (trade.amount * (trade.price * 0.95))) {
+                totalWin++;
+            }
+            if (!stockStats[trade.symbol]) stockStats[trade.symbol] = 0;
+            stockStats[trade.symbol] += trade.total;
+        });
 
-    writeDb(db); // Save if auto-created or updated
-    res.json(userData);
+        const winRate = sellTrades.length > 0 ? ((totalWin / sellTrades.length) * 100).toFixed(1) : 0;
+        const bestStock = Object.keys(stockStats).sort((a, b) => stockStats[b] - stockStats[a])[0] || '-';
+
+        user.stats = {
+            winRate,
+            bestStock,
+            totalTrades: history.length,
+            profitableTrades: totalWin
+        };
+
+        await user.save();
+        res.json(user);
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
-app.post('/api/trade/buy', (req, res) => {
-    const username = req.headers['x-user'];
+app.post('/api/trade/buy', async (req, res) => {
+    const username = req.headers['x-user']?.toLowerCase();
     if (!username) return res.status(401).json({ error: 'Auth required' });
+
     const { symbol, amount } = req.body;
     const stock = marketData.find(s => s.symbol === symbol);
     if (!stock) return res.status(404).json({ success: false, message: 'Hisse bulunamadı.' });
 
-    const db = readDb();
-    const userData = getUser(db, username);
-    const cost = stock.price * amount;
-    if (cost > userData.balance) return res.status(400).json({ success: false, message: 'Yetersiz bakiye.' });
+    try {
+        const user = await User.findOne({ username });
+        if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
-    userData.balance -= cost;
-    const existing = userData.portfolio.find(p => p.symbol === symbol);
-    if (existing) {
-        const totalOwned = existing.amount + amount;
-        existing.averageCost = (existing.averageCost * existing.amount + cost) / totalOwned;
-        existing.amount = totalOwned;
-    } else {
-        userData.portfolio.push({ symbol, amount, averageCost: stock.price });
+        const cost = stock.price * amount;
+        if (cost > user.balance) return res.status(400).json({ success: false, message: 'Yetersiz bakiye.' });
+
+        user.balance -= cost;
+        const existing = user.portfolio.find(p => p.symbol === symbol);
+        if (existing) {
+            const totalOwned = existing.amount + amount;
+            existing.averageCost = (existing.averageCost * existing.amount + cost) / totalOwned;
+            existing.amount = totalOwned;
+        } else {
+            user.portfolio.push({ symbol, amount, averageCost: stock.price });
+        }
+
+        user.history.unshift({
+            id: Date.now(),
+            type: 'ALIM',
+            symbol,
+            amount,
+            price: stock.price,
+            total: cost,
+            date: new Date().toLocaleString('tr-TR'),
+            isAuto: false
+        });
+
+        await user.save();
+        res.json({ success: true, data: user });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
     }
-
-    userData.history.unshift({
-        id: Date.now(),
-        type: 'ALIM',
-        symbol,
-        amount,
-        price: stock.price,
-        total: cost,
-        date: new Date().toLocaleString('tr-TR'),
-        isAuto: false
-    });
-
-    writeDb(db);
-    res.json({ success: true, data: userData });
 });
 
-app.post('/api/trade/sell', (req, res) => {
-    const username = req.headers['x-user'];
+app.post('/api/trade/sell', async (req, res) => {
+    const username = req.headers['x-user']?.toLowerCase();
     if (!username) return res.status(401).json({ error: 'Auth required' });
+
     const { symbol, amount } = req.body;
-    const db = readDb();
-    const userData = getUser(db, username);
-    const stockInPortfolio = userData.portfolio.find(p => p.symbol === symbol);
-    if (!stockInPortfolio || stockInPortfolio.amount < amount) {
-        return res.status(400).json({ success: false, message: 'Yetersiz hisse adedi.' });
+    try {
+        const user = await User.findOne({ username });
+        if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
+
+        const stockInPortfolio = user.portfolio.find(p => p.symbol === symbol);
+        if (!stockInPortfolio || stockInPortfolio.amount < amount) {
+            return res.status(400).json({ success: false, message: 'Yetersiz hisse adedi.' });
+        }
+
+        const stock = marketData.find(s => s.symbol === symbol);
+        const revenue = (stock ? stock.price : 0) * amount;
+
+        user.balance += revenue;
+        stockInPortfolio.amount -= amount;
+        if (stockInPortfolio.amount === 0) {
+            user.portfolio = user.portfolio.filter(p => p.symbol !== symbol);
+        }
+
+        user.history.unshift({
+            id: Date.now(),
+            type: 'SATIM',
+            symbol,
+            amount,
+            price: stock ? stock.price : 0,
+            total: revenue,
+            date: new Date().toLocaleString('tr-TR'),
+            isAuto: false
+        });
+
+        await user.save();
+        res.json({ success: true, data: user });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
     }
-
-    const stock = marketData.find(s => s.symbol === symbol);
-    const revenue = (stock ? stock.price : 0) * amount;
-
-    userData.balance += revenue;
-    stockInPortfolio.amount -= amount;
-    if (stockInPortfolio.amount === 0) {
-        userData.portfolio = userData.portfolio.filter(p => p.symbol !== symbol);
-    }
-
-    userData.history.unshift({
-        id: Date.now(),
-        type: 'SATIM',
-        symbol,
-        amount,
-        price: stock ? stock.price : 0,
-        total: revenue,
-        date: new Date().toLocaleString('tr-TR'),
-        isAuto: false
-    });
-
-    writeDb(db);
-    res.json({ success: true, data: userData });
 });
 
-app.post('/api/bot/config', (req, res) => {
-    const username = req.headers['x-user'];
+app.post('/api/bot/config', async (req, res) => {
+    const username = req.headers['x-user']?.toLowerCase();
     if (!username) return res.status(401).json({ error: 'Auth required' });
+
     const { symbol, config } = req.body;
-    const db = readDb();
-    const userData = getUser(db, username);
-    userData.botConfigs[symbol] = { ...userData.botConfigs[symbol], ...config };
-    writeDb(db);
-    res.json({ success: true, data: userData.botConfigs });
+    try {
+        const user = await User.findOne({ username });
+        if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
+
+        const currentConfigs = user.botConfigs || new Map();
+        const existingConfig = currentConfigs.get(symbol) || {};
+        currentConfigs.set(symbol, { ...existingConfig, ...config });
+
+        user.botConfigs = currentConfigs;
+        await user.save();
+        res.json({ success: true, data: Object.fromEntries(user.botConfigs) });
+    } catch (err) {
+        console.error('Bot Config Error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

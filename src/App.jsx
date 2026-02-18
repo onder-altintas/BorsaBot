@@ -34,6 +34,7 @@ function App() {
     marketData,
     wealthHistory,
     botConfigs,
+    stats,
     buyStock,
     sellStock,
     updateBotConfig,

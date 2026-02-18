@@ -169,6 +169,14 @@ body {
   background-color: var(--error-bg);
 }
 
+.bg-accent-subtle {
+  background-color: var(--accent-glow);
+}
+
+.text-accent-primary {
+  color: var(--accent-primary);
+}
+
 .connection-error-badge {
   background-color: var(--error);
   color: white;

@@ -8,6 +8,7 @@ export const useTrading = (currentUser) => {
     const [history, setHistory] = useState([]);
     const [marketData, setMarketData] = useState([]);
     const [wealthHistory, setWealthHistory] = useState([]);
+    const [botConfigs, setBotConfigs] = useState({});
     const [stats, setStats] = useState({ winRate: 0, bestStock: '-', totalTrades: 0 });
     const [isConnected, setIsConnected] = useState(true);
 

@@ -279,10 +279,11 @@ setInterval(async () => {
                 // Auto-Save
                 await user.save();
             }
-        } catch (error) {
-            console.error('Simülasyon Hatası:', error);
         }
-    }, 3000);
+    } catch (error) {
+        console.error('Simülasyon Hatası:', error);
+    }
+}, 3000);
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json(marketData));
@@ -422,19 +423,19 @@ app.post('/api/bot/config', async (req, res) => {
         const user = await User.findOne({ username });
         if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
-        // Mongoose Map handles updates differently. Use .set() or direct property access if it's a Map.
-        if (user.botConfigs instanceof Map) {
+        console.log(`🤖 Bot ayarı güncelleniyor: ${symbol}`, config);
+
+        if (user.botConfigs && typeof user.botConfigs.set === 'function') {
             const existing = user.botConfigs.get(symbol) || {};
             user.botConfigs.set(symbol, { ...existing, ...config });
         } else {
-            // Fallback for plain object
+            if (!user.botConfigs) user.botConfigs = {};
             user.botConfigs[symbol] = { ...(user.botConfigs[symbol] || {}), ...config };
         }
 
         user.markModified('botConfigs');
         await user.save();
 
-        // Convert Map to plain object for response
         const responseData = user.botConfigs instanceof Map ?
             Object.fromEntries(user.botConfigs) : user.botConfigs;
 

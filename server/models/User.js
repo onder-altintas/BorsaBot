@@ -39,6 +39,10 @@ const UserSchema = new mongoose.Schema({
         totalTrades: Number,
         profitableTrades: Number
     }
-}, { timestamps: true });
+}, {
+    timestamps: true,
+    toJSON: { flattenMaps: true },
+    toObject: { flattenMaps: true }
+});
 
 module.exports = mongoose.model('User', UserSchema);

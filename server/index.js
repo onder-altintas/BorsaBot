@@ -81,6 +81,8 @@ app.use((req, res, next) => {
     next();
 });
 
+const COMMISSION_RATE = 0.0005; // 5/10000 commission rate
+
 // Helper for initial user
 const getInitialUserData = (username) => ({
     username,
@@ -267,16 +269,19 @@ const executeSimulation = async () => {
 
                         const rec = stock.indicators?.recommendation;
                         if (rec === 'GÜÇLÜ AL') {
-                            const cost = stock.price * (config.amount || 1);
-                            if (user.balance >= cost) {
-                                user.balance -= cost;
+                            const stockCost = stock.price * (config.amount || 1);
+                            const commission = stockCost * COMMISSION_RATE;
+                            const totalCost = stockCost + commission;
+
+                            if (user.balance >= totalCost) {
+                                user.balance -= totalCost;
                                 const existing = user.portfolio.find(p => p.symbol === stock.symbol);
                                 if (existing) {
                                     const totalOwned = existing.amount + (config.amount || 1);
-                                    existing.averageCost = (existing.averageCost * existing.amount + cost) / totalOwned;
+                                    existing.averageCost = (existing.averageCost * existing.amount + totalCost) / totalOwned;
                                     existing.amount = totalOwned;
                                 } else {
-                                    user.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: stock.price });
+                                    user.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: (totalCost / (config.amount || 1)) });
                                 }
                                 user.history.unshift({
                                     id: Date.now() + Math.random(),
@@ -284,7 +289,8 @@ const executeSimulation = async () => {
                                     symbol: stock.symbol,
                                     amount: config.amount || 1,
                                     price: stock.price,
-                                    total: cost,
+                                    commission: commission,
+                                    total: totalCost,
                                     date: new Date().toLocaleString('tr-TR'),
                                     isAuto: true
                                 });
@@ -300,8 +306,11 @@ const executeSimulation = async () => {
 
                                 if (shouldSellSignal || shouldSellSL || shouldSellTP) {
                                     const sellAmount = Math.min(stockInPortfolio.amount, (config.amount || 1));
-                                    const revenue = stock.price * sellAmount;
-                                    user.balance += revenue;
+                                    const stockRevenue = stock.price * sellAmount;
+                                    const commission = stockRevenue * COMMISSION_RATE;
+                                    const netRevenue = stockRevenue - commission;
+
+                                    user.balance += netRevenue;
                                     stockInPortfolio.amount -= sellAmount;
 
                                     let reason = 'Sinyal';
@@ -317,7 +326,8 @@ const executeSimulation = async () => {
                                         symbol: stock.symbol,
                                         amount: sellAmount,
                                         price: stock.price,
-                                        total: revenue,
+                                        commission: commission,
+                                        total: netRevenue,
                                         date: new Date().toLocaleString('tr-TR'),
                                         isAuto: true,
                                         reason: reason
@@ -432,17 +442,20 @@ app.post('/api/trade/buy', async (req, res) => {
 
         if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
-        const cost = stock.price * amount;
-        if (cost > user.balance) return res.status(400).json({ success: false, message: 'Yetersiz bakiye.' });
+        const stockCost = stock.price * amount;
+        const commission = stockCost * COMMISSION_RATE;
+        const totalCost = stockCost + commission;
 
-        user.balance -= cost;
+        if (totalCost > user.balance) return res.status(400).json({ success: false, message: 'Yetersiz bakiye.' });
+
+        user.balance -= totalCost;
         const existing = user.portfolio.find(p => p.symbol === symbol);
         if (existing) {
             const totalOwned = existing.amount + amount;
-            existing.averageCost = (existing.averageCost * existing.amount + cost) / totalOwned;
+            existing.averageCost = (existing.averageCost * existing.amount + totalCost) / totalOwned;
             existing.amount = totalOwned;
         } else {
-            user.portfolio.push({ symbol, amount, averageCost: stock.price });
+            user.portfolio.push({ symbol, amount, averageCost: (totalCost / amount) });
         }
 
         user.history.unshift({
@@ -451,7 +464,8 @@ app.post('/api/trade/buy', async (req, res) => {
             symbol,
             amount,
             price: stock.price,
-            total: cost,
+            commission: commission,
+            total: totalCost,
             date: new Date().toLocaleString('tr-TR'),
             isAuto: false
         });
@@ -491,9 +505,11 @@ app.post('/api/trade/sell', async (req, res) => {
         }
 
         const stock = marketData.find(s => s.symbol === symbol);
-        const revenue = (stock ? stock.price : 0) * amount;
+        const stockRevenue = (stock ? stock.price : 0) * amount;
+        const commission = stockRevenue * COMMISSION_RATE;
+        const netRevenue = stockRevenue - commission;
 
-        user.balance += revenue;
+        user.balance += netRevenue;
         stockInPortfolio.amount -= amount;
         if (stockInPortfolio.amount === 0) {
             user.portfolio = user.portfolio.filter(p => p.symbol !== symbol);
@@ -505,7 +521,8 @@ app.post('/api/trade/sell', async (req, res) => {
             symbol,
             amount,
             price: stock ? stock.price : 0,
-            total: revenue,
+            commission: commission,
+            total: netRevenue,
             date: new Date().toLocaleString('tr-TR'),
             isAuto: false
         });
@@ -520,6 +537,34 @@ app.post('/api/trade/sell', async (req, res) => {
         res.json({ success: true, data: user });
     } catch (err) {
         console.error('Sell Trade Error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+app.post('/api/user/reset', async (req, res) => {
+    const username = req.headers['x-user']?.toLowerCase();
+    if (!username) return res.status(401).json({ error: 'Auth required' });
+
+    try {
+        const initialData = getInitialUserData(username);
+        if (isAtlasOnline) {
+            let user = await User.findOne({ username });
+            if (user) {
+                user.balance = initialData.balance;
+                user.portfolio = initialData.portfolio;
+                user.history = initialData.history;
+                user.wealthHistory = initialData.wealthHistory;
+                user.stats = initialData.stats;
+                await user.save();
+            }
+            res.json({ success: true, data: user });
+        } else {
+            localDB.users[username] = initialData;
+            saveLocalDB();
+            res.json({ success: true, data: initialData });
+        }
+    } catch (err) {
+        console.error('Reset Error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });

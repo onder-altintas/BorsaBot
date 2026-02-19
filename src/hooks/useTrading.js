@@ -138,6 +138,24 @@ export const useTrading = (currentUser) => {
         }
     };
 
+    const resetAccount = async () => {
+        if (!currentUser) return { success: false, message: 'Giriş yapılmalı.' };
+        try {
+            const res = await fetch(`${API_BASE_URL}/user/reset`, {
+                method: 'POST',
+                headers: { 'x-user': currentUser }
+            });
+            const result = await res.json();
+            if (result.success) {
+                fetchData();
+                return { success: true };
+            }
+            return { success: false, message: result.message };
+        } catch (error) {
+            return { success: false, message: 'Sunucu hatası.' };
+        }
+    };
+
     return {
         balance,
         portfolio,
@@ -149,6 +167,7 @@ export const useTrading = (currentUser) => {
         isConnected,
         buyStock,
         sellStock,
-        updateBotConfig
+        updateBotConfig,
+        resetAccount
     };
 };

@@ -4,7 +4,11 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'rec
 
 const TradeModal = ({ stock, balance, ownedAmount, onBuy, onSell, onClose }) => {
     const [amount, setAmount] = useState(1);
-    const totalCost = (stock.price * amount).toFixed(2);
+    const COMMISSION_RATE = 0.0005;
+    const stockCost = stock.price * amount;
+    const commission = stockCost * COMMISSION_RATE;
+    const totalWithCommission = (stockCost + commission).toFixed(2);
+    const revenueWithCommission = (stockCost - commission).toFixed(2);
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -62,16 +66,26 @@ const TradeModal = ({ stock, balance, ownedAmount, onBuy, onSell, onClose }) => 
                         />
                     </div>
 
-                    <div className="total-box">
-                        <span>Toplam Tutar</span>
-                        <span className="text-lg font-bold">₺{parseFloat(totalCost).toLocaleString('tr-TR')}</span>
+                    <div className="total-details glass p-3 rounded-lg mb-4">
+                        <div className="flex justify-between text-sm mb-1">
+                            <span className="text-secondary">Hisse Tutarı:</span>
+                            <span>₺{stockCost.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-error mb-1">
+                            <span className="text-secondary">Komisyon (%0.05):</span>
+                            <span>₺{commission.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between font-bold border-t border-white/10 pt-2 mt-2">
+                            <span className="text-secondary">Toplam:</span>
+                            <span className="text-lg">₺{parseFloat(totalWithCommission).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
+                        </div>
                     </div>
                 </div>
 
                 <div className="modal-actions">
                     <button
                         className="btn-trade-buy"
-                        disabled={amount <= 0 || parseFloat(totalCost) > balance}
+                        disabled={amount <= 0 || parseFloat(totalWithCommission) > balance}
                         onClick={() => onBuy(amount)}
                     >
                         Sanal Alım Yap

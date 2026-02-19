@@ -38,6 +38,7 @@ function App() {
     buyStock,
     sellStock,
     updateBotConfig,
+    resetAccount,
     isConnected
   } = useTrading(currentUser);
 
@@ -103,7 +104,12 @@ function App() {
 
   return (
     <div className="layout">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onLogout={handleLogout}
+        onReset={resetAccount}
+      />
       <main className="main-content">
         <header className="header">
           <div className="header-search">

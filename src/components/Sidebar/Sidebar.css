@@ -66,3 +66,16 @@
     flex-direction: column;
     gap: 0.5rem;
 }
+
+.sidebar-item svg {
+    flex-shrink: 0;
+}
+
+.variant-danger {
+    color: var(--error);
+}
+
+.variant-danger:hover {
+    background-color: var(--error-subtle);
+    color: var(--error);
+}

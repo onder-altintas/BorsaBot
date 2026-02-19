@@ -6,13 +6,14 @@ import {
   History,
   Settings,
   LogOut,
+  RefreshCcw,
   LineChart
 } from 'lucide-react';
 import './Sidebar.css';
 
-const SidebarItem = ({ icon: IconComponent, label, active, onClick }) => (
+const SidebarItem = ({ icon: IconComponent, label, active, onClick, variant }) => (
   <div
-    className={`sidebar-item ${active ? 'active' : ''}`}
+    className={`sidebar-item ${active ? 'active' : ''} ${variant ? `variant-${variant}` : ''}`}
     onClick={onClick}
   >
     {IconComponent && <IconComponent size={20} />}
@@ -20,7 +21,7 @@ const SidebarItem = ({ icon: IconComponent, label, active, onClick }) => (
   </div>
 );
 
-const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
+const Sidebar = ({ activeTab, setActiveTab, onLogout, onReset }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Panel', icon: LayoutDashboard },
     { id: 'market', label: 'Borsa', icon: LineChart },
@@ -28,6 +29,16 @@ const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
     { id: 'bots', label: 'Bot', icon: Settings },
     { id: 'history', label: 'Geçmiş', icon: History },
   ];
+
+  const handleReset = async () => {
+    if (window.confirm('Tüm portföyünüz ve geçmişiniz silinecek, bakiyeniz 100.000 TL\'ye sıfırlanacak. Emin misiniz?')) {
+      const success = await onReset();
+      if (success) {
+        alert('Hesabınız başarıyla sıfırlandı! 💸');
+        setActiveTab('dashboard');
+      }
+    }
+  };
 
   return (
     <div className="sidebar">
@@ -48,6 +59,12 @@ const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
       </div>
 
       <div className="sidebar-footer">
+        <SidebarItem
+          icon={RefreshCcw}
+          label="Hesabı Sıfırla"
+          variant="danger"
+          onClick={handleReset}
+        />
         <SidebarItem icon={Settings} label="Ayarlar" onClick={() => setActiveTab('bots')} />
         <SidebarItem icon={LogOut} label="Çıkış Yap" onClick={onLogout} />
       </div>

@@ -14,17 +14,24 @@ export const useTrading = (currentUser) => {
 
     const fetchData = async () => {
         if (!currentUser) return;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 saniye zaman aşımı
+
         try {
             const [marketRes, userRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/market?t=${Date.now()}`),
+                fetch(`${API_BASE_URL}/market?t=${Date.now()}`, { signal: controller.signal }),
                 fetch(`${API_BASE_URL}/user/data?t=${Date.now()}`, {
-                    headers: { 'x-user': currentUser }
+                    headers: { 'x-user': currentUser },
+                    signal: controller.signal
                 })
             ]);
+
+            clearTimeout(timeoutId);
 
             if (marketRes.ok && userRes.ok) {
                 setIsConnected(true);
             } else {
+                console.warn('API Yanıt Hatası:', marketRes.status, userRes.status);
                 setIsConnected(false);
             }
 
@@ -42,7 +49,12 @@ export const useTrading = (currentUser) => {
                 setStats(uData.stats ?? { winRate: 0, bestStock: '-', totalTrades: 0 });
             }
         } catch (error) {
-            console.error('Veri çekme hatası:', error);
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+                console.error('İstek zaman aşımına uğradı (Timeout).');
+            } else {
+                console.error('Veri çekme hatası:', error);
+            }
             setIsConnected(false);
         }
     };

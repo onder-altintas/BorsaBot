@@ -9,10 +9,47 @@ const User = require('./models/User');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('✅ MongoDB Atlas Bağlantısı Başarılı'))
-    .catch(err => console.error('❌ MongoDB Bağlantı Hatası:', err));
+// Database State
+let isAtlasOnline = false;
+let localDB = { users: {} };
+const DB_PATH = path.join(__dirname, 'db.json');
+
+// Load Local DB on start
+if (fs.existsSync(DB_PATH)) {
+    try {
+        localDB = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+        if (!localDB.users) localDB.users = {};
+    } catch (e) {
+        console.error('❌ Yerel veritabanı yüklenemedi:', e);
+    }
+}
+
+const saveLocalDB = () => {
+    try {
+        fs.writeFileSync(DB_PATH, JSON.stringify(localDB, null, 2));
+    } catch (e) {
+        console.error('❌ Yerel veritabanı kaydedilemedi:', e);
+    }
+};
+
+// MongoDB Connection with improved error handling
+const connectDB = async () => {
+    try {
+        await mongoose.connect(process.env.MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000 // 5 saniye içinde bağlanamazsa hata ver
+        });
+        isAtlasOnline = true;
+        console.log('✅ MongoDB Atlas Bağlantısı Başarılı');
+        await migrateFromJson(); // Verileri içeri aktar
+    } catch (err) {
+        isAtlasOnline = false;
+        console.error('❌ MongoDB Atlas Bağlantısı Başarısız. Yerel Modda Çalışılıyor.', err.message);
+        if (err.message.includes('IP address that isn\'t whitelisted') || err.message.includes('ECONNREFUSED')) {
+            console.warn('⚠️ Erişim Engeli: Lütfen MongoDB Atlas panelinde IP adresinizi whitelist\'e ekleyin.');
+        }
+    }
+};
+connectDB();
 
 app.use(cors({
     origin: '*',
@@ -20,6 +57,12 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'x-user']
 }));
 app.use(express.json());
+
+// Request Logger Middleware
+app.use((req, res, next) => {
+    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url} - User: ${req.headers['x-user'] || 'Guest'}`);
+    next();
+});
 
 // Helper for initial user
 const getInitialUserData = (username) => ({
@@ -161,8 +204,7 @@ const calculateIndicators = (history, currentPrice) => {
     };
 };
 
-// Simulation Engine: Runs every 3 seconds
-setInterval(async () => {
+const executeSimulation = async () => {
     try {
         // 1. Update Market Data
         marketData = marketData.map(stock => {
@@ -185,18 +227,21 @@ setInterval(async () => {
             };
         });
 
-        // 2. Execute DB Operations ONLY if connected
-        if (mongoose.connection.readyState !== 1) return;
+        // 2. Identify Users to Process
+        let usersToProcess = [];
+        if (isAtlasOnline && mongoose.connection.readyState === 1) {
+            usersToProcess = await User.find({});
+        } else {
+            usersToProcess = Object.entries(localDB.users).map(([username, data]) => ({ ...data, isLocal: true }));
+        }
 
-        const allUsers = await User.find({});
-        for (let user of allUsers) {
-            let dbChanged = false;
+        for (let user of usersToProcess) {
+            let userChanged = false;
 
             // Execute Bots
             const botConfigs = user.botConfigs;
             if (botConfigs) {
-                // Handle both Map (Mongoose) and plain Object
-                const entries = botConfigs instanceof Map ? botConfigs.entries() : Object.entries(botConfigs);
+                const entries = (botConfigs instanceof Map) ? botConfigs.entries() : Object.entries(botConfigs);
 
                 for (let [symbol, config] of entries) {
                     if (config && config.active) {
@@ -226,10 +271,9 @@ setInterval(async () => {
                                     date: new Date().toLocaleString('tr-TR'),
                                     isAuto: true
                                 });
-                                dbChanged = true;
+                                userChanged = true;
                             }
                         } else {
-                            // Check for GÜÇLÜ SAT OR Stop-Loss / Take-Profit
                             const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
                             if (stockInPortfolio) {
                                 const profitPercent = ((stock.price - stockInPortfolio.averageCost) / stockInPortfolio.averageCost) * 100;
@@ -261,29 +305,42 @@ setInterval(async () => {
                                         isAuto: true,
                                         reason: reason
                                     });
-                                    dbChanged = true;
+                                    userChanged = true;
                                 }
                             }
                         }
                     }
                 }
+            }
 
-                // 3. Update Wealth History
-                const currentPortfolioValue = user.portfolio.reduce((acc, item) => {
-                    const mStock = marketData.find(s => s.symbol === item.symbol);
-                    return acc + (mStock ? mStock.price * item.amount : 0);
-                }, 0);
-                const totalWealth = user.balance + currentPortfolioValue;
-                user.wealthHistory = [...user.wealthHistory, { time: new Date().toLocaleTimeString(), wealth: totalWealth }].slice(-50);
+            // Update Wealth History
+            const currentPortfolioValue = user.portfolio.reduce((acc, item) => {
+                const mStock = marketData.find(s => s.symbol === item.symbol);
+                return acc + (mStock ? mStock.price * item.amount : 0);
+            }, 0);
+            const totalWealth = user.balance + currentPortfolioValue;
+            user.wealthHistory = [...(user.wealthHistory || []), { time: new Date().toLocaleTimeString(), wealth: totalWealth }].slice(-50);
+            userChanged = true;
 
-                // Auto-Save
-                await user.save();
+            // Save Progress
+            if (userChanged) {
+                if (user.isLocal) {
+                    localDB.users[user.username] = user;
+                    // No sync individual disk write here to avoid perf issues, handled by saveInterval or specific actions
+                } else if (typeof user.save === 'function') {
+                    await user.save();
+                }
             }
         }
+
+        if (!isAtlasOnline) saveLocalDB();
+
     } catch (error) {
         console.error('Simülasyon Hatası:', error);
     }
-}, 3000);
+};
+
+setInterval(executeSimulation, 3000);
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json(marketData));
@@ -293,39 +350,49 @@ app.get('/api/user/data', async (req, res) => {
     if (!username) return res.status(401).json({ error: 'Auth required' });
 
     try {
-        let user = await User.findOne({ username });
-        if (!user) {
-            user = await User.create(getInitialUserData(username));
-        }
-
-        // Calculate Extended Stats
-        const history = user.history || [];
-        const sellTrades = history.filter(t => t.type === 'SATIM');
-
-        let totalWin = 0;
-        const stockStats = {};
-
-        sellTrades.forEach(trade => {
-            if (trade.total > (trade.amount * (trade.price * 0.95))) {
-                totalWin++;
+        let user;
+        if (isAtlasOnline) {
+            user = await User.findOne({ username });
+            if (!user) {
+                user = await User.create(getInitialUserData(username));
             }
-            if (!stockStats[trade.symbol]) stockStats[trade.symbol] = 0;
-            stockStats[trade.symbol] += trade.total;
-        });
 
-        const winRate = sellTrades.length > 0 ? ((totalWin / sellTrades.length) * 100).toFixed(1) : 0;
-        const bestStock = Object.keys(stockStats).sort((a, b) => stockStats[b] - stockStats[a])[0] || '-';
+            // Calculate Extended Stats
+            const history = user.history || [];
+            const sellTrades = history.filter(t => t.type === 'SATIM');
 
-        user.stats = {
-            winRate,
-            bestStock,
-            totalTrades: history.length,
-            profitableTrades: totalWin
-        };
+            let totalWin = 0;
+            const stockStats = {};
 
-        await user.save();
-        res.json(user);
+            sellTrades.forEach(trade => {
+                const profit = trade.total - (trade.amount * trade.price * 0.95);
+                if (profit > 0) totalWin++;
+                if (!stockStats[trade.symbol]) stockStats[trade.symbol] = 0;
+                stockStats[trade.symbol] += trade.total;
+            });
+
+            const winRate = sellTrades.length > 0 ? ((totalWin / sellTrades.length) * 100).toFixed(1) : 0;
+            const bestStock = Object.keys(stockStats).sort((a, b) => stockStats[b] - stockStats[a])[0] || '-';
+
+            user.stats = {
+                winRate,
+                bestStock,
+                totalTrades: history.length,
+                profitableTrades: totalWin
+            };
+
+            await user.save();
+            return res.json(user);
+        } else {
+            // Local Fallback
+            if (!localDB.users[username]) {
+                localDB.users[username] = getInitialUserData(username);
+                saveLocalDB();
+            }
+            return res.json(localDB.users[username]);
+        }
     } catch (err) {
+        console.error('User Data API Error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
@@ -339,7 +406,13 @@ app.post('/api/trade/buy', async (req, res) => {
     if (!stock) return res.status(404).json({ success: false, message: 'Hisse bulunamadı.' });
 
     try {
-        const user = await User.findOne({ username });
+        let user;
+        if (isAtlasOnline) {
+            user = await User.findOne({ username });
+        } else {
+            user = localDB.users[username];
+        }
+
         if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
         const cost = stock.price * amount;
@@ -366,9 +439,16 @@ app.post('/api/trade/buy', async (req, res) => {
             isAuto: false
         });
 
-        await user.save();
+        if (isAtlasOnline) {
+            await user.save();
+        } else {
+            localDB.users[username] = user;
+            saveLocalDB();
+        }
+
         res.json({ success: true, data: user });
     } catch (err) {
+        console.error('Buy Trade Error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
@@ -379,7 +459,13 @@ app.post('/api/trade/sell', async (req, res) => {
 
     const { symbol, amount } = req.body;
     try {
-        const user = await User.findOne({ username });
+        let user;
+        if (isAtlasOnline) {
+            user = await User.findOne({ username });
+        } else {
+            user = localDB.users[username];
+        }
+
         if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
         const stockInPortfolio = user.portfolio.find(p => p.symbol === symbol);
@@ -407,9 +493,16 @@ app.post('/api/trade/sell', async (req, res) => {
             isAuto: false
         });
 
-        await user.save();
+        if (isAtlasOnline) {
+            await user.save();
+        } else {
+            localDB.users[username] = user;
+            saveLocalDB();
+        }
+
         res.json({ success: true, data: user });
     } catch (err) {
+        console.error('Sell Trade Error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
@@ -420,26 +513,38 @@ app.post('/api/bot/config', async (req, res) => {
 
     const { symbol, config } = req.body;
     try {
-        const user = await User.findOne({ username });
-        if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
+        if (isAtlasOnline) {
+            const user = await User.findOne({ username });
+            if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
-        console.log(`🤖 Bot ayarı güncelleniyor: ${symbol}`, config);
+            console.log(`🤖 Bot ayarı güncelleniyor: ${symbol}`, config);
 
-        if (user.botConfigs && typeof user.botConfigs.set === 'function') {
-            const existing = user.botConfigs.get(symbol) || {};
-            user.botConfigs.set(symbol, { ...existing, ...config });
+            if (user.botConfigs && typeof user.botConfigs.set === 'function') {
+                const existing = user.botConfigs.get(symbol) || {};
+                user.botConfigs.set(symbol, { ...existing, ...config });
+            } else {
+                if (!user.botConfigs) user.botConfigs = {};
+                user.botConfigs[symbol] = { ...(user.botConfigs[symbol] || {}), ...config };
+            }
+
+            user.markModified('botConfigs');
+            await user.save();
+
+            const responseData = user.botConfigs instanceof Map ?
+                Object.fromEntries(user.botConfigs) : user.botConfigs;
+
+            res.json({ success: true, data: responseData });
         } else {
+            // Local Fallback
+            const user = localDB.users[username];
+            if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
+
             if (!user.botConfigs) user.botConfigs = {};
             user.botConfigs[symbol] = { ...(user.botConfigs[symbol] || {}), ...config };
+
+            saveLocalDB();
+            res.json({ success: true, data: user.botConfigs });
         }
-
-        user.markModified('botConfigs');
-        await user.save();
-
-        const responseData = user.botConfigs instanceof Map ?
-            Object.fromEntries(user.botConfigs) : user.botConfigs;
-
-        res.json({ success: true, data: responseData });
     } catch (err) {
         console.error('Bot Config Error:', err);
         res.status(500).json({ success: false, message: 'Server error' });

@@ -71,14 +71,14 @@ const TradeModal = ({ stock, balance, ownedAmount, onBuy, onSell, onClose }) => 
                 <div className="modal-actions">
                     <button
                         className="btn-trade-buy"
-                        disabled={parseFloat(totalCost) > balance}
+                        disabled={amount <= 0 || parseFloat(totalCost) > balance}
                         onClick={() => onBuy(amount)}
                     >
                         Sanal Alım Yap
                     </button>
                     <button
                         className="btn-trade-sell"
-                        disabled={ownedAmount < amount}
+                        disabled={amount <= 0 || ownedAmount < amount}
                         onClick={() => onSell(amount)}
                     >
                         Sanal Satış Yap

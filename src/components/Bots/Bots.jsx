@@ -21,7 +21,9 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                 </div>
 
                 {marketData.map(stock => {
-                    const botConfig = botConfigs[stock.symbol] || { active: false, amount: 1 };
+                    const botConfig = (botConfigs && typeof botConfigs.get === 'function'
+                        ? botConfigs.get(stock.symbol)
+                        : botConfigs?.[stock.symbol]) || { active: false, amount: 1 };
                     const recommendation = stock.indicators?.recommendation || 'TUT';
 
                     let recClass = 'badge-hold';

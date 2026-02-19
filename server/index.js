@@ -193,92 +193,96 @@ setInterval(async () => {
             let dbChanged = false;
 
             // Execute Bots
-            const botConfigs = user.botConfigs || new Map();
-            for (let [symbol, config] of botConfigs) {
-                if (config && config.active) {
-                    const stock = marketData.find(s => s.symbol === symbol);
-                    if (!stock) continue;
+            const botConfigs = user.botConfigs;
+            if (botConfigs) {
+                // Handle both Map (Mongoose) and plain Object
+                const entries = botConfigs instanceof Map ? botConfigs.entries() : Object.entries(botConfigs);
 
-                    const rec = stock.indicators?.recommendation;
-                    if (rec === 'GÜÇLÜ AL') {
-                        const cost = stock.price * (config.amount || 1);
-                        if (user.balance >= cost) {
-                            user.balance -= cost;
-                            const existing = user.portfolio.find(p => p.symbol === stock.symbol);
-                            if (existing) {
-                                const totalOwned = existing.amount + (config.amount || 1);
-                                existing.averageCost = (existing.averageCost * existing.amount + cost) / totalOwned;
-                                existing.amount = totalOwned;
-                            } else {
-                                user.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: stock.price });
-                            }
-                            user.history.unshift({
-                                id: Date.now() + Math.random(),
-                                type: 'ALIM',
-                                symbol: stock.symbol,
-                                amount: config.amount || 1,
-                                price: stock.price,
-                                total: cost,
-                                date: new Date().toLocaleString('tr-TR'),
-                                isAuto: true
-                            });
-                            dbChanged = true;
-                        }
-                    } else {
-                        // Check for GÜÇLÜ SAT OR Stop-Loss / Take-Profit
-                        const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
-                        if (stockInPortfolio) {
-                            const profitPercent = ((stock.price - stockInPortfolio.averageCost) / stockInPortfolio.averageCost) * 100;
-                            const shouldSellSL = config.stopLoss && profitPercent <= -Math.abs(config.stopLoss);
-                            const shouldSellTP = config.takeProfit && profitPercent >= Math.abs(config.takeProfit);
-                            const shouldSellSignal = rec === 'GÜÇLÜ SAT';
+                for (let [symbol, config] of entries) {
+                    if (config && config.active) {
+                        const stock = marketData.find(s => s.symbol === symbol);
+                        if (!stock) continue;
 
-                            if (shouldSellSignal || shouldSellSL || shouldSellTP) {
-                                const sellAmount = Math.min(stockInPortfolio.amount, (config.amount || 1));
-                                const revenue = stock.price * sellAmount;
-                                user.balance += revenue;
-                                stockInPortfolio.amount -= sellAmount;
-
-                                let reason = 'Sinyal';
-                                if (shouldSellSL) reason = 'Stop-Loss';
-                                else if (shouldSellTP) reason = 'Take-Profit';
-
-                                if (stockInPortfolio.amount === 0) {
-                                    user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
+                        const rec = stock.indicators?.recommendation;
+                        if (rec === 'GÜÇLÜ AL') {
+                            const cost = stock.price * (config.amount || 1);
+                            if (user.balance >= cost) {
+                                user.balance -= cost;
+                                const existing = user.portfolio.find(p => p.symbol === stock.symbol);
+                                if (existing) {
+                                    const totalOwned = existing.amount + (config.amount || 1);
+                                    existing.averageCost = (existing.averageCost * existing.amount + cost) / totalOwned;
+                                    existing.amount = totalOwned;
+                                } else {
+                                    user.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: stock.price });
                                 }
                                 user.history.unshift({
                                     id: Date.now() + Math.random(),
-                                    type: 'SATIM',
+                                    type: 'ALIM',
                                     symbol: stock.symbol,
-                                    amount: sellAmount,
+                                    amount: config.amount || 1,
                                     price: stock.price,
-                                    total: revenue,
+                                    total: cost,
                                     date: new Date().toLocaleString('tr-TR'),
-                                    isAuto: true,
-                                    reason: reason
+                                    isAuto: true
                                 });
                                 dbChanged = true;
+                            }
+                        } else {
+                            // Check for GÜÇLÜ SAT OR Stop-Loss / Take-Profit
+                            const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
+                            if (stockInPortfolio) {
+                                const profitPercent = ((stock.price - stockInPortfolio.averageCost) / stockInPortfolio.averageCost) * 100;
+                                const shouldSellSL = config.stopLoss && profitPercent <= -Math.abs(config.stopLoss);
+                                const shouldSellTP = config.takeProfit && profitPercent >= Math.abs(config.takeProfit);
+                                const shouldSellSignal = rec === 'GÜÇLÜ SAT';
+
+                                if (shouldSellSignal || shouldSellSL || shouldSellTP) {
+                                    const sellAmount = Math.min(stockInPortfolio.amount, (config.amount || 1));
+                                    const revenue = stock.price * sellAmount;
+                                    user.balance += revenue;
+                                    stockInPortfolio.amount -= sellAmount;
+
+                                    let reason = 'Sinyal';
+                                    if (shouldSellSL) reason = 'Stop-Loss';
+                                    else if (shouldSellTP) reason = 'Take-Profit';
+
+                                    if (stockInPortfolio.amount === 0) {
+                                        user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
+                                    }
+                                    user.history.unshift({
+                                        id: Date.now() + Math.random(),
+                                        type: 'SATIM',
+                                        symbol: stock.symbol,
+                                        amount: sellAmount,
+                                        price: stock.price,
+                                        total: revenue,
+                                        date: new Date().toLocaleString('tr-TR'),
+                                        isAuto: true,
+                                        reason: reason
+                                    });
+                                    dbChanged = true;
+                                }
                             }
                         }
                     }
                 }
+
+                // 3. Update Wealth History
+                const currentPortfolioValue = user.portfolio.reduce((acc, item) => {
+                    const mStock = marketData.find(s => s.symbol === item.symbol);
+                    return acc + (mStock ? mStock.price * item.amount : 0);
+                }, 0);
+                const totalWealth = user.balance + currentPortfolioValue;
+                user.wealthHistory = [...user.wealthHistory, { time: new Date().toLocaleTimeString(), wealth: totalWealth }].slice(-50);
+
+                // Auto-Save
+                await user.save();
             }
-
-            // 3. Update Wealth History
-            const currentPortfolioValue = user.portfolio.reduce((acc, item) => {
-                const mStock = marketData.find(s => s.symbol === item.symbol);
-                return acc + (mStock ? mStock.price * item.amount : 0);
-            }, 0);
-            const totalWealth = user.balance + currentPortfolioValue;
-            user.wealthHistory = [...user.wealthHistory, { time: new Date().toLocaleTimeString(), wealth: totalWealth }].slice(-50);
-
-            // Auto-Save
-            await user.save();
+        } catch (error) {
+            console.error('Simülasyon Hatası:', error);
         }
-    } catch (error) {
-        console.error('Simülasyon Hatası:', error);
-    }
-}, 3000);
+    }, 3000);
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json(marketData));
@@ -418,13 +422,23 @@ app.post('/api/bot/config', async (req, res) => {
         const user = await User.findOne({ username });
         if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
-        const currentConfigs = user.botConfigs || new Map();
-        const existingConfig = currentConfigs.get(symbol) || {};
-        currentConfigs.set(symbol, { ...existingConfig, ...config });
+        // Mongoose Map handles updates differently. Use .set() or direct property access if it's a Map.
+        if (user.botConfigs instanceof Map) {
+            const existing = user.botConfigs.get(symbol) || {};
+            user.botConfigs.set(symbol, { ...existing, ...config });
+        } else {
+            // Fallback for plain object
+            user.botConfigs[symbol] = { ...(user.botConfigs[symbol] || {}), ...config };
+        }
 
-        user.botConfigs = currentConfigs;
+        user.markModified('botConfigs');
         await user.save();
-        res.json({ success: true, data: Object.fromEntries(user.botConfigs) });
+
+        // Convert Map to plain object for response
+        const responseData = user.botConfigs instanceof Map ?
+            Object.fromEntries(user.botConfigs) : user.botConfigs;
+
+        res.json({ success: true, data: responseData });
     } catch (err) {
         console.error('Bot Config Error:', err);
         res.status(500).json({ success: false, message: 'Server error' });

@@ -48,7 +48,7 @@ const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
       </div>
 
       <div className="sidebar-footer">
-        <SidebarItem icon={Settings} label="Ayarlar" />
+        <SidebarItem icon={Settings} label="Ayarlar" onClick={() => setActiveTab('bots')} />
         <SidebarItem icon={LogOut} label="Çıkış Yap" onClick={onLogout} />
       </div>
     </div>

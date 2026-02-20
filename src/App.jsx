@@ -33,6 +33,7 @@ function App() {
     history,
     marketData,
     wealthHistory,
+    wealthSnapshots,
     botConfigs,
     stats,
     buyStock,
@@ -268,10 +269,30 @@ function App() {
           )}
 
           {activeTab === 'portfolio' && (() => {
+            // Anlık toplam varlık
+            const currentPortfolioValue = portfolio.reduce((acc, item) => {
+              const mInfo = marketData.find(s => s.symbol === item.symbol);
+              return acc + (mInfo ? mInfo.price * item.amount : 0);
+            }, 0);
+            const currentWealth = balance + currentPortfolioValue;
+
+            // Snapshot'lardan dönem başı değerleri
+            const dayStartWealth = wealthSnapshots?.dayStart?.wealth ?? currentWealth;
+            const weekStartWealth = wealthSnapshots?.weekStart?.wealth ?? currentWealth;
+            const monthStartWealth = wealthSnapshots?.monthStart?.wealth ?? currentWealth;
+
+            const profitDaily = currentWealth - dayStartWealth;
+            const profitWeekly = currentWealth - weekStartWealth;
+            const profitMonthly = currentWealth - monthStartWealth;
+
+            // İşlem hacmi ve komisyon — history'den
+            let volumeDaily = 0, volumeWeekly = 0, volumeMonthly = 0;
+            let commissionTotal = 0;
+
             const now = new Date();
             const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const startOfWeek = new Date(startOfDay);
-            startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay());
+            startOfWeek.setDate(startOfDay.getDate() - ((startOfDay.getDay() + 6) % 7));
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
             const parseTradeDate = (dateStr) => {
@@ -282,27 +303,13 @@ function App() {
               return new Date(`${year}-${month}-${day}T${parts[1] || '00:00:00'}`);
             };
 
-            let profitDaily = 0, profitWeekly = 0, profitMonthly = 0;
-            let volumeDaily = 0, volumeWeekly = 0, volumeMonthly = 0;
-            let commissionTotal = 0;
-
             (history || []).forEach(trade => {
               const tradeDate = parseTradeDate(trade.date);
-              const tradeVolume = trade.amount * trade.price;
+              const vol = trade.amount * trade.price;
               commissionTotal += trade.commission || 0;
-
-              const isDaily = tradeDate && tradeDate >= startOfDay;
-              const isWeekly = tradeDate && tradeDate >= startOfWeek;
-              const isMonthly = tradeDate && tradeDate >= startOfMonth;
-
-              if (isDaily) volumeDaily += tradeVolume;
-              if (isWeekly) volumeWeekly += tradeVolume;
-              if (isMonthly) volumeMonthly += tradeVolume;
-
-              const sign = trade.type === 'SATIM' ? 1 : -1;
-              if (isDaily) profitDaily += sign * trade.total;
-              if (isWeekly) profitWeekly += sign * trade.total;
-              if (isMonthly) profitMonthly += sign * trade.total;
+              if (tradeDate && tradeDate >= startOfDay) volumeDaily += vol;
+              if (tradeDate && tradeDate >= startOfWeek) volumeWeekly += vol;
+              if (tradeDate && tradeDate >= startOfMonth) volumeMonthly += vol;
             });
 
             const fmtMoney = (val) => `₺${Math.abs(val).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
@@ -310,9 +317,18 @@ function App() {
             const profitClass = (val) => val >= 0 ? 'text-success' : 'text-error';
 
             const periods = [
-              { label: 'Günlük', icon: '📅', profit: profitDaily, volume: volumeDaily },
-              { label: 'Haftalık', icon: '📆', profit: profitWeekly, volume: volumeWeekly },
-              { label: 'Aylık', icon: '🗓️', profit: profitMonthly, volume: volumeMonthly },
+              {
+                label: 'Günlük', icon: '📅', profit: profitDaily, volume: volumeDaily,
+                sub: wealthSnapshots?.dayStart?.date ? `Başlangıç: ₺${dayStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Henüz snapshot yok'
+              },
+              {
+                label: 'Haftalık', icon: '📆', profit: profitWeekly, volume: volumeWeekly,
+                sub: wealthSnapshots?.weekStart?.date ? `Başlangıç: ₺${weekStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Henüz snapshot yok'
+              },
+              {
+                label: 'Aylık', icon: '🗓️', profit: profitMonthly, volume: volumeMonthly,
+                sub: wealthSnapshots?.monthStart?.date ? `Başlangıç: ₺${monthStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Henüz snapshot yok'
+              },
             ];
 
             return (
@@ -332,6 +348,7 @@ function App() {
                         <span className="text-secondary text-xs">İşlem Hacmi</span>
                         <span className="font-bold">{fmtMoney(p.volume)}</span>
                       </div>
+                      <span className="text-secondary" style={{ fontSize: '0.7rem', marginTop: '0.25rem' }}>{p.sub}</span>
                     </div>
                   ))}
 
@@ -389,10 +406,6 @@ function App() {
               </div>
             );
           })()}
-
-
-
-
           {activeTab === 'history' && (
             <History history={history} />
           )}

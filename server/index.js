@@ -290,12 +290,38 @@ const executeSimulation = async () => {
             }, 0);
             const totalWealth = user.balance + currentPortfolioValue;
             user.wealthHistory = [...(user.wealthHistory || []), { time: new Date().toLocaleTimeString(), wealth: totalWealth }].slice(-50);
+
+            // Update Wealth Snapshots (günlük / haftalık / aylık dönem başı)
+            const now = new Date();
+            const todayStr = now.toLocaleDateString('tr-TR');
+            const monthStr = `${now.getFullYear()}-${now.getMonth() + 1}`;
+            // Haftanın başı: Pazartesi
+            const weekStart = new Date(now);
+            weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+            const weekStr = weekStart.toLocaleDateString('tr-TR');
+
+            if (!user.wealthSnapshots) user.wealthSnapshots = {};
+
+            if (!user.wealthSnapshots.dayStart || user.wealthSnapshots.dayStart.date !== todayStr) {
+                user.wealthSnapshots.dayStart = { date: todayStr, wealth: totalWealth };
+                user.markModified('wealthSnapshots');
+            }
+            if (!user.wealthSnapshots.weekStart || user.wealthSnapshots.weekStart.date !== weekStr) {
+                user.wealthSnapshots.weekStart = { date: weekStr, wealth: totalWealth };
+                user.markModified('wealthSnapshots');
+            }
+            if (!user.wealthSnapshots.monthStart || user.wealthSnapshots.monthStart.date !== monthStr) {
+                user.wealthSnapshots.monthStart = { date: monthStr, wealth: totalWealth };
+                user.markModified('wealthSnapshots');
+            }
+
             userChanged = true;
 
             // Save Progress
             if (userChanged && typeof user.save === 'function') {
                 await user.save();
             }
+
         }
     } catch (error) {
         console.error('Simülasyon Hatası:', error);
@@ -334,7 +360,7 @@ app.get('/api/user/data', async (req, res) => {
             const profit = trade.total - (trade.amount * (trade.price / (1 + COMMISSION_RATE))); // Bu yaklaşık bir maliyet
             // Daha doğru bakiye bazlı kar hesabı gerekirse modellerde maliyet saklanmalı
             if (trade.total > (trade.amount * trade.price * (1 - COMMISSION_RATE))) { /* Kar */ }
-            
+
             // Mevcut mantığa göre winRate tahmini:
             if (trade.total > 0) totalWin++; // Sadeleştirilmiş
             if (!stockStats[trade.symbol]) stockStats[trade.symbol] = 0;

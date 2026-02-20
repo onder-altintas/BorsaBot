@@ -17,6 +17,7 @@ export const useTrading = (currentUser) => {
     const [history, setHistory] = useState([]);
     const [marketData, setMarketData] = useState([]);
     const [wealthHistory, setWealthHistory] = useState([]);
+    const [wealthSnapshots, setWealthSnapshots] = useState({});
     const [botConfigs, setBotConfigs] = useState({});
     const [stats, setStats] = useState({ winRate: 0, bestStock: '-', totalTrades: 0 });
     const [isConnected, setIsConnected] = useState(true);
@@ -54,6 +55,7 @@ export const useTrading = (currentUser) => {
                 setPortfolio(uData.portfolio ?? []);
                 setHistory(uData.history ?? []);
                 setWealthHistory(uData.wealthHistory ?? []);
+                setWealthSnapshots(uData.wealthSnapshots ?? {});
                 setBotConfigs(uData.botConfigs ?? {});
                 setStats(uData.stats ?? { winRate: 0, bestStock: '-', totalTrades: 0 });
             }
@@ -162,6 +164,7 @@ export const useTrading = (currentUser) => {
         history,
         marketData,
         wealthHistory,
+        wealthSnapshots,
         botConfigs,
         stats,
         isConnected,

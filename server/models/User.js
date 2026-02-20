@@ -14,6 +14,7 @@ const UserSchema = new mongoose.Schema({
         symbol: String,
         amount: Number,
         price: Number,
+        commission: Number,
         total: Number,
         date: String,
         isAuto: Boolean,
@@ -23,6 +24,12 @@ const UserSchema = new mongoose.Schema({
         time: String,
         wealth: Number
     }],
+    // Dönem başı varlık snapshot'ları
+    wealthSnapshots: {
+        dayStart: { date: String, wealth: Number },
+        weekStart: { date: String, wealth: Number },
+        monthStart: { date: String, wealth: Number }
+    },
     botConfigs: {
         type: Map,
         of: {

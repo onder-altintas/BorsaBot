@@ -494,6 +494,9 @@ app.post('/api/user/reset', async (req, res) => {
             user.history = initialData.history;
             user.wealthHistory = initialData.wealthHistory;
             user.stats = initialData.stats;
+            // Snapshot'ları sıfırla — simülasyon 3 sn içinde yeni snapshot kaydeder
+            user.wealthSnapshots = {};
+            user.markModified('wealthSnapshots');
             await user.save();
         }
         res.json({ success: true, data: user });
@@ -502,6 +505,7 @@ app.post('/api/user/reset', async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
+
 
 app.post('/api/bot/config', async (req, res) => {
     const username = req.headers['x-user']?.toLowerCase();

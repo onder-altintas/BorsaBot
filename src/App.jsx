@@ -268,7 +268,6 @@ function App() {
           )}
 
           {activeTab === 'portfolio' && (() => {
-            // --- Portföy İstatistik Hesaplamaları ---
             const now = new Date();
             const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const startOfWeek = new Date(startOfDay);
@@ -276,7 +275,6 @@ function App() {
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
             const parseTradeDate = (dateStr) => {
-              // "dd.MM.yyyy HH:mm:ss" formatını parse et
               if (!dateStr) return null;
               const parts = dateStr.split(' ');
               if (!parts[0]) return null;
@@ -285,79 +283,66 @@ function App() {
             };
 
             let profitDaily = 0, profitWeekly = 0, profitMonthly = 0;
-            let volumeTotal = 0;
+            let volumeDaily = 0, volumeWeekly = 0, volumeMonthly = 0;
             let commissionTotal = 0;
 
             (history || []).forEach(trade => {
               const tradeDate = parseTradeDate(trade.date);
               const tradeVolume = trade.amount * trade.price;
-              const tradeCommission = trade.commission || 0;
+              commissionTotal += trade.commission || 0;
 
-              volumeTotal += tradeVolume;
-              commissionTotal += tradeCommission;
+              const isDaily = tradeDate && tradeDate >= startOfDay;
+              const isWeekly = tradeDate && tradeDate >= startOfWeek;
+              const isMonthly = tradeDate && tradeDate >= startOfMonth;
 
-              // Sadece SATIMLAR'dan kar/zarar hesaplanır
-              if (trade.type === 'SATIM') {
-                // Kâr = Net Gelir - (Tahmini alış maliyeti)
-                // trade.total = net gelir (komisyon düşülmüş), trade.price * trade.amount = brüt satış tutarı
-                // Alış maliyetini burada elimizde yoksa, gelir bazlı kâr olarak bu kısmı portföy kar/zarar ile gösterelim
-                // Günlük/Haftalık/Aylık: o süredeki işlemlerden elde edilen net gelir - brüt alış maliyeti oranı
-                // Burada basitçe [net gelir] kaydını gösteriyoruz (alış maliyeti avg ile)
-                // Daha doğru alternatif: her satımın net geliri ekle, her alımın toplam maliyet çıkart
+              if (isDaily) volumeDaily += tradeVolume;
+              if (isWeekly) volumeWeekly += tradeVolume;
+              if (isMonthly) volumeMonthly += tradeVolume;
 
-                if (tradeDate && tradeDate >= startOfDay) profitDaily += trade.total;
-                if (tradeDate && tradeDate >= startOfWeek) profitWeekly += trade.total;
-                if (tradeDate && tradeDate >= startOfMonth) profitMonthly += trade.total;
-              }
-              if (trade.type === 'ALIM') {
-                if (tradeDate && tradeDate >= startOfDay) profitDaily -= trade.total;
-                if (tradeDate && tradeDate >= startOfWeek) profitWeekly -= trade.total;
-                if (tradeDate && tradeDate >= startOfMonth) profitMonthly -= trade.total;
-              }
+              const sign = trade.type === 'SATIM' ? 1 : -1;
+              if (isDaily) profitDaily += sign * trade.total;
+              if (isWeekly) profitWeekly += sign * trade.total;
+              if (isMonthly) profitMonthly += sign * trade.total;
             });
 
-            const fmt = (val) => `${val >= 0 ? '+' : ''}₺${Math.abs(val).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
-            const fmtPos = (val) => val >= 0 ? 'text-success' : 'text-error';
+            const fmtMoney = (val) => `₺${Math.abs(val).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
+            const fmtProfit = (val) => `${val >= 0 ? '+' : '-'}${fmtMoney(val)}`;
+            const profitClass = (val) => val >= 0 ? 'text-success' : 'text-error';
+
+            const periods = [
+              { label: 'Günlük', icon: '📅', profit: profitDaily, volume: volumeDaily },
+              { label: 'Haftalık', icon: '📆', profit: profitWeekly, volume: volumeWeekly },
+              { label: 'Aylık', icon: '🗓️', profit: profitMonthly, volume: volumeMonthly },
+            ];
 
             return (
               <div className="fade-in">
                 <h2 className="mb-6">Portföyüm</h2>
 
-                {/* İstatistik Kartları */}
                 <div className="portfolio-stats-grid">
-                  <div className="card-premium portfolio-stat-card">
-                    <div className="portfolio-stat-icon">📅</div>
-                    <span className="text-secondary text-sm">Günlük Kâr/Zarar</span>
-                    <h3 className={fmtPos(profitDaily)}>{fmt(profitDaily)}</h3>
-                    <span className="text-secondary text-xs">Bugünkü net işlem kârı</span>
-                  </div>
-                  <div className="card-premium portfolio-stat-card">
-                    <div className="portfolio-stat-icon">📆</div>
-                    <span className="text-secondary text-sm">Haftalık Kâr/Zarar</span>
-                    <h3 className={fmtPos(profitWeekly)}>{fmt(profitWeekly)}</h3>
-                    <span className="text-secondary text-xs">Bu haftaki net işlem kârı</span>
-                  </div>
-                  <div className="card-premium portfolio-stat-card">
-                    <div className="portfolio-stat-icon">🗓️</div>
-                    <span className="text-secondary text-sm">Aylık Kâr/Zarar</span>
-                    <h3 className={fmtPos(profitMonthly)}>{fmt(profitMonthly)}</h3>
-                    <span className="text-secondary text-xs">Bu ayki net işlem kârı</span>
-                  </div>
-                  <div className="card-premium portfolio-stat-card">
-                    <div className="portfolio-stat-icon">📊</div>
-                    <span className="text-secondary text-sm">Toplam İşlem Hacmi</span>
-                    <h3>₺{volumeTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</h3>
-                    <span className="text-secondary text-xs">Tüm zamanlar</span>
-                  </div>
+                  {periods.map(p => (
+                    <div key={p.label} className="card-premium portfolio-stat-card">
+                      <div className="portfolio-stat-icon">{p.icon}</div>
+                      <span className="text-secondary text-sm font-bold">{p.label} Özet</span>
+                      <div className="stat-row">
+                        <span className="text-secondary text-xs">Kâr/Zarar</span>
+                        <span className={`font-bold ${profitClass(p.profit)}`}>{fmtProfit(p.profit)}</span>
+                      </div>
+                      <div className="stat-row">
+                        <span className="text-secondary text-xs">İşlem Hacmi</span>
+                        <span className="font-bold">{fmtMoney(p.volume)}</span>
+                      </div>
+                    </div>
+                  ))}
+
                   <div className="card-premium portfolio-stat-card commission-card">
                     <div className="portfolio-stat-icon">🏦</div>
-                    <span className="text-secondary text-sm">Toplam Ödenen Komisyon</span>
-                    <h3 className="text-warning">₺{commissionTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</h3>
-                    <span className="text-secondary text-xs">%0.05 komisyon oranı</span>
+                    <span className="text-secondary text-sm font-bold">Toplam Komisyon</span>
+                    <h3 className="text-warning">{fmtMoney(commissionTotal)}</h3>
+                    <span className="text-secondary text-xs">%0.05 — Tüm zamanlar</span>
                   </div>
                 </div>
 
-                {/* Portföy Tablosu */}
                 <div className="card mt-6">
                   {portfolio.length === 0 ? (
                     <p className="text-secondary text-center p-6">Henüz bir hisse senediniz bulunmuyor.</p>
@@ -377,7 +362,6 @@ function App() {
                         {portfolio.map(item => {
                           const marketInfo = marketData.find(s => s.symbol === item.symbol);
                           if (!marketInfo) return null;
-
                           const currentVal = marketInfo.price * item.amount;
                           const costVal = item.averageCost * item.amount;
                           const profit = currentVal - costVal;
@@ -405,6 +389,8 @@ function App() {
               </div>
             );
           })()}
+
+
 
 
           {activeTab === 'history' && (

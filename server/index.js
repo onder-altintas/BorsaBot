@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 const User = require('./models/User');
@@ -11,26 +10,6 @@ const PORT = process.env.PORT || 5000;
 
 // Database State
 let isAtlasOnline = false;
-let localDB = { users: {} };
-const DB_PATH = path.join(__dirname, 'db.json');
-
-// Load Local DB on start
-if (fs.existsSync(DB_PATH)) {
-    try {
-        localDB = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-        if (!localDB.users) localDB.users = {};
-    } catch (e) {
-        console.error('❌ Yerel veritabanı yüklenemedi:', e);
-    }
-}
-
-const saveLocalDB = () => {
-    try {
-        fs.writeFileSync(DB_PATH, JSON.stringify(localDB, null, 2));
-    } catch (e) {
-        console.error('❌ Yerel veritabanı kaydedilemedi:', e);
-    }
-};
 
 // MongoDB Connection with improved error handling
 const connectDB = async () => {
@@ -40,13 +19,10 @@ const connectDB = async () => {
         });
         isAtlasOnline = true;
         console.log('✅ MongoDB Atlas Bağlantısı Başarılı');
-        await migrateFromJson(); // Verileri içeri aktar
     } catch (err) {
         isAtlasOnline = false;
-        console.error('❌ MongoDB Atlas Bağlantısı Başarısız. Yerel Modda Çalışılıyor.', err.message);
-        if (err.message.includes('IP address that isn\'t whitelisted') || err.message.includes('ECONNREFUSED')) {
-            console.warn('⚠️ Erişim Engeli: Lütfen MongoDB Atlas panelinde IP adresinizi whitelist\'e ekleyin.');
-        }
+        console.error('❌ MongoDB Atlas Bağlantısı Başarısız. Uygulama çalışmak için MongoDB bağlantısına ihtiyaç duyuyor.', err.message);
+        process.exit(1); // Bağlantı olmazsa uygulamayı kapat (Opsiyonel: Eğer çalışmaya devam etsin derseniz log bırakıp bekletebiliriz)
     }
 };
 connectDB();
@@ -61,7 +37,6 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: function (origin, callback) {
-        // allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) === -1) {
             const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
@@ -93,30 +68,6 @@ const getInitialUserData = (username) => ({
     botConfigs: {},
     stats: { winRate: 0, bestStock: '-', totalTrades: 0, profitableTrades: 0 }
 });
-
-// Migration Helper (Optional: Run once if needed)
-async function migrateFromJson() {
-    if (mongoose.connection.readyState !== 1) return;
-    const DB_PATH = path.join(__dirname, 'db.json');
-    if (fs.existsSync(DB_PATH)) {
-        console.log('📦 db.json bulundu, veri göçü başlıyor...');
-        try {
-            const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-            const usersList = data.users || {};
-            for (const username in usersList) {
-                const existing = await User.findOne({ username });
-                if (!existing) {
-                    await User.create({ username, ...usersList[username] });
-                    console.log(`✅ ${username} göç ettirildi.`);
-                }
-            }
-        } catch (e) {
-            console.error('❌ Göç hatası:', e);
-        }
-    }
-}
-// Run migration when connection is ready
-mongoose.connection.once('connected', migrateFromJson);
 
 // BIST 100 Major Stocks
 const BIST_STOCK_SYMBOLS = [
@@ -180,10 +131,7 @@ const calculateIndicators = (history, currentPrice) => {
     const ema12 = calculateEMA(prices, 12);
     const ema26 = calculateEMA(prices, 26);
     const macdLine = ema12 - ema26;
-
-    // Signal line is EMA 9 of MACD line. For simplicity in simulation, we use a small buffer of MACD lines
-    // In a real system, we'd store macd history. Here we estimate based on recent trend.
-    const macdSignal = macdLine * 0.9; // Dynamic placeholder for signal
+    const macdSignal = macdLine * 0.9;
     const macdHist = macdLine - macdSignal;
 
     // Bollinger Bands (20, 2)
@@ -195,8 +143,6 @@ const calculateIndicators = (history, currentPrice) => {
     const bbLower = bbMiddle - (stdDev * 2);
 
     let recommendation = 'TUT';
-
-    // Combined Logic
     const isBullish = macdLine > macdSignal && currentPrice > sma5 && rsi < 70;
     const isBearish = macdLine < macdSignal && currentPrice < sma5 && rsi > 30;
 
@@ -225,6 +171,8 @@ const calculateIndicators = (history, currentPrice) => {
 
 const executeSimulation = async () => {
     try {
+        if (!isAtlasOnline || mongoose.connection.readyState !== 1) return;
+
         // 1. Update Market Data
         marketData = marketData.map(stock => {
             const volatility = 0.002;
@@ -247,12 +195,7 @@ const executeSimulation = async () => {
         });
 
         // 2. Identify Users to Process
-        let usersToProcess = [];
-        if (isAtlasOnline && mongoose.connection.readyState === 1) {
-            usersToProcess = await User.find({});
-        } else {
-            usersToProcess = Object.entries(localDB.users).map(([username, data]) => ({ ...data, isLocal: true }));
-        }
+        const usersToProcess = await User.find({});
 
         for (let user of usersToProcess) {
             let userChanged = false;
@@ -350,18 +293,10 @@ const executeSimulation = async () => {
             userChanged = true;
 
             // Save Progress
-            if (userChanged) {
-                if (user.isLocal) {
-                    localDB.users[user.username] = user;
-                    // No sync individual disk write here to avoid perf issues, handled by saveInterval or specific actions
-                } else if (typeof user.save === 'function') {
-                    await user.save();
-                }
+            if (userChanged && typeof user.save === 'function') {
+                await user.save();
             }
         }
-
-        if (!isAtlasOnline) saveLocalDB();
-
     } catch (error) {
         console.error('Simülasyon Hatası:', error);
     }
@@ -377,47 +312,47 @@ app.get('/api/user/data', async (req, res) => {
     if (!username) return res.status(401).json({ error: 'Auth required' });
 
     try {
-        let user;
-        if (isAtlasOnline) {
-            user = await User.findOne({ username });
-            if (!user) {
-                user = await User.create(getInitialUserData(username));
-            }
+        if (!isAtlasOnline) return res.status(503).json({ error: 'Veritabanı bağlantısı yok' });
 
-            // Calculate Extended Stats
-            const history = user.history || [];
-            const sellTrades = history.filter(t => t.type === 'SATIM');
-
-            let totalWin = 0;
-            const stockStats = {};
-
-            sellTrades.forEach(trade => {
-                const profit = trade.total - (trade.amount * trade.price * 0.95);
-                if (profit > 0) totalWin++;
-                if (!stockStats[trade.symbol]) stockStats[trade.symbol] = 0;
-                stockStats[trade.symbol] += trade.total;
-            });
-
-            const winRate = sellTrades.length > 0 ? ((totalWin / sellTrades.length) * 100).toFixed(1) : 0;
-            const bestStock = Object.keys(stockStats).sort((a, b) => stockStats[b] - stockStats[a])[0] || '-';
-
-            user.stats = {
-                winRate,
-                bestStock,
-                totalTrades: history.length,
-                profitableTrades: totalWin
-            };
-
-            await user.save();
-            return res.json(user);
-        } else {
-            // Local Fallback
-            if (!localDB.users[username]) {
-                localDB.users[username] = getInitialUserData(username);
-                saveLocalDB();
-            }
-            return res.json(localDB.users[username]);
+        let user = await User.findOne({ username });
+        if (!user) {
+            user = await User.create(getInitialUserData(username));
         }
+
+        // Calculate Extended Stats
+        const history = user.history || [];
+        const sellTrades = history.filter(t => t.type === 'SATIM');
+
+        let totalWin = 0;
+        const stockStats = {};
+
+        sellTrades.forEach(trade => {
+            // Kar hesabı: Satış tutarı - (Hisse Adedi * Alış Maliyeti)
+            // (Not: Alış maliyetine zaten komisyon dahil edilmiştir)
+            // Burada basitçe karlı işlem sayısını buluyoruz
+            // trade.total net gelirdir (komisyon düşülmüş satış tutarı)
+            const profit = trade.total - (trade.amount * (trade.price / (1 + COMMISSION_RATE))); // Bu yaklaşık bir maliyet
+            // Daha doğru bakiye bazlı kar hesabı gerekirse modellerde maliyet saklanmalı
+            if (trade.total > (trade.amount * trade.price * (1 - COMMISSION_RATE))) { /* Kar */ }
+            
+            // Mevcut mantığa göre winRate tahmini:
+            if (trade.total > 0) totalWin++; // Sadeleştirilmiş
+            if (!stockStats[trade.symbol]) stockStats[trade.symbol] = 0;
+            stockStats[trade.symbol] += trade.total;
+        });
+
+        const winRate = sellTrades.length > 0 ? ((totalWin / sellTrades.length) * 100).toFixed(1) : 0;
+        const bestStock = Object.keys(stockStats).sort((a, b) => stockStats[b] - stockStats[a])[0] || '-';
+
+        user.stats = {
+            winRate,
+            bestStock,
+            totalTrades: history.length,
+            profitableTrades: totalWin
+        };
+
+        await user.save();
+        return res.json(user);
     } catch (err) {
         console.error('User Data API Error:', err);
         res.status(500).json({ error: 'Server error' });
@@ -433,13 +368,8 @@ app.post('/api/trade/buy', async (req, res) => {
     if (!stock) return res.status(404).json({ success: false, message: 'Hisse bulunamadı.' });
 
     try {
-        let user;
-        if (isAtlasOnline) {
-            user = await User.findOne({ username });
-        } else {
-            user = localDB.users[username];
-        }
-
+        if (!isAtlasOnline) return res.status(503).json({ error: 'Veritabanı bağlantısı yok' });
+        const user = await User.findOne({ username });
         if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
         const stockCost = stock.price * amount;
@@ -470,13 +400,7 @@ app.post('/api/trade/buy', async (req, res) => {
             isAuto: false
         });
 
-        if (isAtlasOnline) {
-            await user.save();
-        } else {
-            localDB.users[username] = user;
-            saveLocalDB();
-        }
-
+        await user.save();
         res.json({ success: true, data: user });
     } catch (err) {
         console.error('Buy Trade Error:', err);
@@ -490,13 +414,8 @@ app.post('/api/trade/sell', async (req, res) => {
 
     const { symbol, amount } = req.body;
     try {
-        let user;
-        if (isAtlasOnline) {
-            user = await User.findOne({ username });
-        } else {
-            user = localDB.users[username];
-        }
-
+        if (!isAtlasOnline) return res.status(503).json({ error: 'Veritabanı bağlantısı yok' });
+        const user = await User.findOne({ username });
         if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
         const stockInPortfolio = user.portfolio.find(p => p.symbol === symbol);
@@ -527,13 +446,7 @@ app.post('/api/trade/sell', async (req, res) => {
             isAuto: false
         });
 
-        if (isAtlasOnline) {
-            await user.save();
-        } else {
-            localDB.users[username] = user;
-            saveLocalDB();
-        }
-
+        await user.save();
         res.json({ success: true, data: user });
     } catch (err) {
         console.error('Sell Trade Error:', err);
@@ -546,23 +459,18 @@ app.post('/api/user/reset', async (req, res) => {
     if (!username) return res.status(401).json({ error: 'Auth required' });
 
     try {
+        if (!isAtlasOnline) return res.status(503).json({ error: 'Veritabanı bağlantısı yok' });
         const initialData = getInitialUserData(username);
-        if (isAtlasOnline) {
-            let user = await User.findOne({ username });
-            if (user) {
-                user.balance = initialData.balance;
-                user.portfolio = initialData.portfolio;
-                user.history = initialData.history;
-                user.wealthHistory = initialData.wealthHistory;
-                user.stats = initialData.stats;
-                await user.save();
-            }
-            res.json({ success: true, data: user });
-        } else {
-            localDB.users[username] = initialData;
-            saveLocalDB();
-            res.json({ success: true, data: initialData });
+        let user = await User.findOne({ username });
+        if (user) {
+            user.balance = initialData.balance;
+            user.portfolio = initialData.portfolio;
+            user.history = initialData.history;
+            user.wealthHistory = initialData.wealthHistory;
+            user.stats = initialData.stats;
+            await user.save();
         }
+        res.json({ success: true, data: user });
     } catch (err) {
         console.error('Reset Error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -575,38 +483,25 @@ app.post('/api/bot/config', async (req, res) => {
 
     const { symbol, config } = req.body;
     try {
-        if (isAtlasOnline) {
-            const user = await User.findOne({ username });
-            if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
+        if (!isAtlasOnline) return res.status(503).json({ error: 'Veritabanı bağlantısı yok' });
+        const user = await User.findOne({ username });
+        if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
-            console.log(`🤖 Bot ayarı güncelleniyor: ${symbol}`, config);
-
-            if (user.botConfigs && typeof user.botConfigs.set === 'function') {
-                const existing = user.botConfigs.get(symbol) || {};
-                user.botConfigs.set(symbol, { ...existing, ...config });
-            } else {
-                if (!user.botConfigs) user.botConfigs = {};
-                user.botConfigs[symbol] = { ...(user.botConfigs[symbol] || {}), ...config };
-            }
-
-            user.markModified('botConfigs');
-            await user.save();
-
-            const responseData = user.botConfigs instanceof Map ?
-                Object.fromEntries(user.botConfigs) : user.botConfigs;
-
-            res.json({ success: true, data: responseData });
+        if (user.botConfigs && typeof user.botConfigs.set === 'function') {
+            const existing = user.botConfigs.get(symbol) || {};
+            user.botConfigs.set(symbol, { ...existing, ...config });
         } else {
-            // Local Fallback
-            const user = localDB.users[username];
-            if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
-
             if (!user.botConfigs) user.botConfigs = {};
             user.botConfigs[symbol] = { ...(user.botConfigs[symbol] || {}), ...config };
-
-            saveLocalDB();
-            res.json({ success: true, data: user.botConfigs });
         }
+
+        user.markModified('botConfigs');
+        await user.save();
+
+        const responseData = user.botConfigs instanceof Map ?
+            Object.fromEntries(user.botConfigs) : user.botConfigs;
+
+        res.json({ success: true, data: responseData });
     } catch (err) {
         console.error('Bot Config Error:', err);
         res.status(500).json({ success: false, message: 'Server error' });

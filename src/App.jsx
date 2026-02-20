@@ -267,55 +267,145 @@ function App() {
             />
           )}
 
-          {activeTab === 'portfolio' && (
-            <div className="fade-in">
-              <h2 className="mb-6">Portföyüm</h2>
-              <div className="card">
-                {portfolio.length === 0 ? (
-                  <p className="text-secondary text-center p-6">Henüz bir hisse senediniz bulunmuyor.</p>
-                ) : (
-                  <table className="portfolio-table">
-                    <thead>
-                      <tr>
-                        <th>Hisse</th>
-                        <th>Adet</th>
-                        <th>Ort. Maliyet</th>
-                        <th>Cari Fiyat</th>
-                        <th>K/Z</th>
-                        <th>İşlem</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {portfolio.map(item => {
-                        const marketInfo = marketData.find(s => s.symbol === item.symbol);
-                        if (!marketInfo) return null; // Skip if stock data is missing
+          {activeTab === 'portfolio' && (() => {
+            // --- Portföy İstatistik Hesaplamaları ---
+            const now = new Date();
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const startOfWeek = new Date(startOfDay);
+            startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay());
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-                        const currentVal = marketInfo.price * item.amount;
-                        const costVal = item.averageCost * item.amount;
-                        const profit = currentVal - costVal;
-                        return (
-                          <tr key={item.symbol}>
-                            <td>{item.symbol}</td>
-                            <td>{item.amount}</td>
-                            <td>₺{item.averageCost.toFixed(2)}</td>
-                            <td>₺{(marketInfo.price || 0).toFixed(2)}</td>
-                            <td className={profit >= 0 ? 'text-success' : 'text-error'}>
-                              ₺{profit.toFixed(2)}
-                            </td>
-                            <td>
-                              <button className="btn-small" onClick={() => setSelectedStock(marketInfo)}>
-                                Yönet
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
+            const parseTradeDate = (dateStr) => {
+              // "dd.MM.yyyy HH:mm:ss" formatını parse et
+              if (!dateStr) return null;
+              const parts = dateStr.split(' ');
+              if (!parts[0]) return null;
+              const [day, month, year] = parts[0].split('.');
+              return new Date(`${year}-${month}-${day}T${parts[1] || '00:00:00'}`);
+            };
+
+            let profitDaily = 0, profitWeekly = 0, profitMonthly = 0;
+            let volumeTotal = 0;
+            let commissionTotal = 0;
+
+            (history || []).forEach(trade => {
+              const tradeDate = parseTradeDate(trade.date);
+              const tradeVolume = trade.amount * trade.price;
+              const tradeCommission = trade.commission || 0;
+
+              volumeTotal += tradeVolume;
+              commissionTotal += tradeCommission;
+
+              // Sadece SATIMLAR'dan kar/zarar hesaplanır
+              if (trade.type === 'SATIM') {
+                // Kâr = Net Gelir - (Tahmini alış maliyeti)
+                // trade.total = net gelir (komisyon düşülmüş), trade.price * trade.amount = brüt satış tutarı
+                // Alış maliyetini burada elimizde yoksa, gelir bazlı kâr olarak bu kısmı portföy kar/zarar ile gösterelim
+                // Günlük/Haftalık/Aylık: o süredeki işlemlerden elde edilen net gelir - brüt alış maliyeti oranı
+                // Burada basitçe [net gelir] kaydını gösteriyoruz (alış maliyeti avg ile)
+                // Daha doğru alternatif: her satımın net geliri ekle, her alımın toplam maliyet çıkart
+
+                if (tradeDate && tradeDate >= startOfDay) profitDaily += trade.total;
+                if (tradeDate && tradeDate >= startOfWeek) profitWeekly += trade.total;
+                if (tradeDate && tradeDate >= startOfMonth) profitMonthly += trade.total;
+              }
+              if (trade.type === 'ALIM') {
+                if (tradeDate && tradeDate >= startOfDay) profitDaily -= trade.total;
+                if (tradeDate && tradeDate >= startOfWeek) profitWeekly -= trade.total;
+                if (tradeDate && tradeDate >= startOfMonth) profitMonthly -= trade.total;
+              }
+            });
+
+            const fmt = (val) => `${val >= 0 ? '+' : ''}₺${Math.abs(val).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
+            const fmtPos = (val) => val >= 0 ? 'text-success' : 'text-error';
+
+            return (
+              <div className="fade-in">
+                <h2 className="mb-6">Portföyüm</h2>
+
+                {/* İstatistik Kartları */}
+                <div className="portfolio-stats-grid">
+                  <div className="card-premium portfolio-stat-card">
+                    <div className="portfolio-stat-icon">📅</div>
+                    <span className="text-secondary text-sm">Günlük Kâr/Zarar</span>
+                    <h3 className={fmtPos(profitDaily)}>{fmt(profitDaily)}</h3>
+                    <span className="text-secondary text-xs">Bugünkü net işlem kârı</span>
+                  </div>
+                  <div className="card-premium portfolio-stat-card">
+                    <div className="portfolio-stat-icon">📆</div>
+                    <span className="text-secondary text-sm">Haftalık Kâr/Zarar</span>
+                    <h3 className={fmtPos(profitWeekly)}>{fmt(profitWeekly)}</h3>
+                    <span className="text-secondary text-xs">Bu haftaki net işlem kârı</span>
+                  </div>
+                  <div className="card-premium portfolio-stat-card">
+                    <div className="portfolio-stat-icon">🗓️</div>
+                    <span className="text-secondary text-sm">Aylık Kâr/Zarar</span>
+                    <h3 className={fmtPos(profitMonthly)}>{fmt(profitMonthly)}</h3>
+                    <span className="text-secondary text-xs">Bu ayki net işlem kârı</span>
+                  </div>
+                  <div className="card-premium portfolio-stat-card">
+                    <div className="portfolio-stat-icon">📊</div>
+                    <span className="text-secondary text-sm">Toplam İşlem Hacmi</span>
+                    <h3>₺{volumeTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</h3>
+                    <span className="text-secondary text-xs">Tüm zamanlar</span>
+                  </div>
+                  <div className="card-premium portfolio-stat-card commission-card">
+                    <div className="portfolio-stat-icon">🏦</div>
+                    <span className="text-secondary text-sm">Toplam Ödenen Komisyon</span>
+                    <h3 className="text-warning">₺{commissionTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</h3>
+                    <span className="text-secondary text-xs">%0.05 komisyon oranı</span>
+                  </div>
+                </div>
+
+                {/* Portföy Tablosu */}
+                <div className="card mt-6">
+                  {portfolio.length === 0 ? (
+                    <p className="text-secondary text-center p-6">Henüz bir hisse senediniz bulunmuyor.</p>
+                  ) : (
+                    <table className="portfolio-table">
+                      <thead>
+                        <tr>
+                          <th>Hisse</th>
+                          <th>Adet</th>
+                          <th>Ort. Maliyet</th>
+                          <th>Cari Fiyat</th>
+                          <th>K/Z</th>
+                          <th>İşlem</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {portfolio.map(item => {
+                          const marketInfo = marketData.find(s => s.symbol === item.symbol);
+                          if (!marketInfo) return null;
+
+                          const currentVal = marketInfo.price * item.amount;
+                          const costVal = item.averageCost * item.amount;
+                          const profit = currentVal - costVal;
+                          return (
+                            <tr key={item.symbol}>
+                              <td>{item.symbol}</td>
+                              <td>{item.amount}</td>
+                              <td>₺{item.averageCost.toFixed(2)}</td>
+                              <td>₺{(marketInfo.price || 0).toFixed(2)}</td>
+                              <td className={profit >= 0 ? 'text-success' : 'text-error'}>
+                                ₺{profit.toFixed(2)}
+                              </td>
+                              <td>
+                                <button className="btn-small" onClick={() => setSelectedStock(marketInfo)}>
+                                  Yönet
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
+
 
           {activeTab === 'history' && (
             <History history={history} />

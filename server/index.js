@@ -294,21 +294,22 @@ const executeSimulation = async () => {
                                 const shouldSellSignal = rec === 'GÜÇLÜ SAT';
 
                                 if (shouldSellSignal || shouldSellSL || shouldSellTP) {
-                                    const sellAmount = Math.min(stockInPortfolio.amount, (config.amount || 1));
+                                    // Kullanıcının isteği: Güçlü Sat veya SL/TP durumunda eldeki TÜM hisseleri sat
+                                    const sellAmount = stockInPortfolio.amount;
                                     const stockRevenue = stock.price * sellAmount;
                                     const commission = stockRevenue * COMMISSION_RATE;
                                     const netRevenue = stockRevenue - commission;
 
                                     user.balance += netRevenue;
-                                    stockInPortfolio.amount -= sellAmount;
+                                    stockInPortfolio.amount = 0; // Hepsini sattık
 
                                     let reason = 'Sinyal';
                                     if (shouldSellSL) reason = 'Stop-Loss';
                                     else if (shouldSellTP) reason = 'Take-Profit';
 
-                                    if (stockInPortfolio.amount === 0) {
-                                        user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
-                                    }
+                                    // Hepsini sattığımız için portföyden tamamen kaldır
+                                    user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
+
                                     user.history.unshift({
                                         id: Date.now() + Math.random(),
                                         type: 'SATIM',

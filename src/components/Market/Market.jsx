@@ -29,14 +29,12 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                     const botConfig = botConfigs[stock.symbol] || { active: false, amount: 1 };
 
                     let recClass = 'badge-hold';
-                    if (recommendation === 'GÜÇLÜ AL') recClass = 'badge-strong-buy';
-                    else if (recommendation === 'AL') recClass = 'badge-buy';
-                    else if (recommendation === 'GÜÇLÜ SAT') recClass = 'badge-strong-sell';
+                    if (recommendation === 'AL') recClass = 'badge-buy';
                     else if (recommendation === 'SAT') recClass = 'badge-sell';
 
                     return (
                         <div key={stock.symbol} className={`stock-row ${botConfig.active ? 'bot-active-row' : ''}`}>
-                            {/* Desktop View Columns */}
+                            {/* Masaüstü Görünümü Sütunları */}
                             <div className="stock-info desktop-only">
                                 <span className="stock-symbol">{stock.symbol}</span>
                                 <span className="stock-name text-xs text-secondary">{stock.name}</span>

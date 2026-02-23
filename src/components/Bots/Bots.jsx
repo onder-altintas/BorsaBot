@@ -27,9 +27,7 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                     const recommendation = stock.indicators?.recommendation || 'TUT';
 
                     let recClass = 'badge-hold';
-                    if (recommendation === 'GÜÇLÜ AL') recClass = 'badge-strong-buy';
-                    else if (recommendation === 'AL') recClass = 'badge-buy';
-                    else if (recommendation === 'GÜÇLÜ SAT') recClass = 'badge-strong-sell';
+                    if (recommendation === 'AL') recClass = 'badge-buy';
                     else if (recommendation === 'SAT') recClass = 'badge-sell';
 
                     return (

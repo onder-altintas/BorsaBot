@@ -20,11 +20,11 @@ const connectDB = async () => {
         });
         isAtlasOnline = true;
         console.log('✅ MongoDB Atlas Bağlantısı Başarılı');
-        await migrateSymbols(); // Run migration after connection
+        await migrateSymbols(); // Bağlantıdan sonra sembol migrasyonunu çalıştır
     } catch (err) {
         isAtlasOnline = false;
         console.error('❌ MongoDB Atlas Bağlantısı Başarısız. Uygulama çalışmak için MongoDB bağlantısına ihtiyaç duyuyor.', err.message);
-        process.exit(1); // Bağlantı olmazsa uygulamayı kapat (Opsiyonel: Eğer çalışmaya devam etsin derseniz log bırakıp bekletebiliriz)
+        process.exit(1); // Bağlantı olmazsa uygulamayı kapat
     }
 };
 connectDB();
@@ -41,7 +41,7 @@ app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) === -1) {
-            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            const msg = 'Bu domain için CORS politikası erişime izin vermiyor.';
             return callback(new Error(msg), false);
         }
         return callback(null, true);
@@ -52,21 +52,21 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Request Logger Middleware
+// İstek Günlükçü Middleware
 app.use((req, res, next) => {
-    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url} - User: ${req.headers['x-user'] || 'Guest'}`);
+    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url} - Kullanıcı: ${req.headers['x-user'] || 'Misafir'}`);
     next();
 });
 
-const COMMISSION_RATE = 0.0005; // 5/10000 commission rate
+const COMMISSION_RATE = 0.0005; // 5/10000 komisyon oranı
 
-// Migration for old symbols
+// Eski semboller için migrasyon (THYAO -> THYAO.IS)
 const migrateSymbols = async () => {
     try {
         const users = await User.find({});
         for (let user of users) {
             let changed = false;
-            // Portfolio migration
+            // Portföy migrasyonu
             user.portfolio = user.portfolio.map(p => {
                 if (!p.symbol.endsWith('.IS')) {
                     p.symbol = p.symbol + '.IS';
@@ -86,15 +86,15 @@ const migrateSymbols = async () => {
                 user.markModified('portfolio');
                 user.markModified('history');
                 await user.save();
-                console.log(`Migrated symbols for user: ${user.username}`);
+                console.log(`Semboller güncellendi, kullanıcı: ${user.username}`);
             }
         }
     } catch (err) {
-        console.error('Migration Error:', err);
+        console.error('Migrasyon Hatası:', err);
     }
 };
 
-// Helper for initial user
+// Yeni kullanıcı için başlangıç verileri
 const getInitialUserData = (username) => ({
     username,
     balance: 100000.00,
@@ -111,7 +111,7 @@ const getInitialUserData = (username) => ({
     stats: { winRate: 0, bestStock: '-', totalTrades: 0, profitableTrades: 0 }
 });
 
-// BIST 100 Major Stocks
+// BIST 100 Başlıca Hisseler
 const BIST_STOCK_SYMBOLS = [
     { symbol: 'THYAO.IS', name: 'Türk Hava Yolları' },
     { symbol: 'ASELS.IS', name: 'Aselsan' },
@@ -153,19 +153,20 @@ const calculateEMA = (data, period) => {
     return ema;
 };
 
+// Gösterge hesaplama fonksiyonu
 const calculateIndicators = (history, currentPrice, symbol) => {
     if (history.length < 2) return { sma5: 0, sma10: 0, ema7: 0, rsi: 50, recommendation: 'TUT', macd: { line: 0, signal: 0, hist: 0 }, bollinger: { upper: 0, middle: 0, lower: 0 }, fisher: { val1: 0, val2: 0 } };
     const prices = history.map(h => h.price);
     const volumes = history.map(h => h.volume || 0);
 
-    // EMA 7
+    // EMA 7 hesaplama
     const ema7 = calculateEMA(prices, 7);
 
-    // SMA
+    // SMA hesaplamaları
     const sma5 = prices.slice(-5).reduce((a, b) => a + b, 0) / Math.min(prices.length, 5);
     const sma10 = prices.slice(-10).reduce((a, b) => a + b, 0) / Math.min(prices.length, 10);
 
-    // RSI
+    // RSI (14) hesaplama
     let gains = 0;
     let losses = 0;
     for (let i = Math.max(1, prices.length - 14); i < prices.length; i++) {
@@ -175,14 +176,14 @@ const calculateIndicators = (history, currentPrice, symbol) => {
     }
     const rsi = losses === 0 ? 100 : 100 - (100 / (1 + (gains / losses)));
 
-    // MACD (12, 26, 9)
+    // MACD (12, 26, 9) hesaplama
     const ema12 = calculateEMA(prices, 12);
     const ema26 = calculateEMA(prices, 26);
     const macdLine = ema12 - ema26;
     const macdSignal = macdLine * 0.9;
     const macdHist = macdLine - macdSignal;
 
-    // Bollinger Bands (20, 2)
+    // Bollinger Bantları (20, 2) hesaplama
     const bbPeriod = Math.min(prices.length, 20);
     const bbMiddle = prices.slice(-bbPeriod).reduce((a, b) => a + b, 0) / bbPeriod;
     const variance = prices.slice(-bbPeriod).reduce((a, b) => a + Math.pow(b - bbMiddle, 2), 0) / bbPeriod;
@@ -192,13 +193,12 @@ const calculateIndicators = (history, currentPrice, symbol) => {
 
     // --- 4'LÜ KOMBO ÖZEL: FISHER TRANSFORM (9) ---
     const fishLen = 9;
-    const fishPrices = history.slice(-fishLen).map(h => (h.high + h.low) / 2 || h.price); // HL2 if exists, else price
+    const fishPrices = history.slice(-fishLen).map(h => (h.high + h.low) / 2 || h.price);
     const high_ = Math.max(...fishPrices);
     const low_ = Math.min(...fishPrices);
 
     const roundF = (val) => val > .99 ? .999 : val < -.99 ? -.999 : val;
 
-    // Geçmiş fisher değerini bul (basitlik için son indikatörden alacağız veya 0'dan başlayacak)
     const prevIndicator = marketData.find(s => s.symbol === symbol)?.indicators;
     const prevFValue = prevIndicator?.fisherRaw || 0;
     const prevFish1 = prevIndicator?.fisher?.val1 || 0;
@@ -207,25 +207,31 @@ const calculateIndicators = (history, currentPrice, symbol) => {
     const fish1 = .5 * Math.log((1 + currentFValue) / (Math.max(0.001, 1 - currentFValue))) + .5 * prevFish1;
     const fish2 = prevFish1;
 
-    // --- 4'LÜ KOMBO ÖZEL: VOLUME MOMENTUM ---
-    // (Simülasyon bazlı olduğu için basitleştirilmiş momentum)
+    // --- 4'LÜ KOMBO ÖZEL: HACİM MOMENTUM ---
     const volSMA25 = volumes.slice(-25).reduce((a, b) => a + b, 0) / Math.min(volumes.length, 25);
     const currentVol = volumes[volumes.length - 1] || 0;
     const isVolBullish = currentVol > volSMA25;
 
     let recommendation = 'TUT';
 
-    // Fisher Kesişimleri (AL/SAT Sinyali)
-    const fBuy = fish1 > fish2 && prevFish1 <= fish2; // crossover
-    const fSell = fish1 < fish2 && prevFish1 >= fish2; // crossunder
+    // Fisher Kesişimleri ve 4'lü İndikatör Sinyal Mantığı
+    const fBuy = fish1 > fish2 && prevFish1 <= fish2;
+    const fSell = fish1 < fish2 && prevFish1 >= fish2;
 
+    // Alış Şartı (Sadece 4'lü İndikatör Bazlı)
     if (fBuy || (fish1 > 0 && currentPrice <= bbLower && rsi < 30)) {
-        recommendation = 'GÜÇLÜ AL';
-    } else if (fish1 > fish2 || (currentPrice > ema7 && isVolBullish)) {
         recommendation = 'AL';
-    } else if (fSell || (fish1 < 0 && currentPrice >= bbUpper && rsi > 70)) {
-        recommendation = 'GÜÇLÜ SAT';
-    } else if (fish1 < fish2 || (currentPrice < ema7 && !isVolBullish)) {
+    }
+    // Satış Şartı (Sadece 4'lü İndikatör Bazlı)
+    else if (fSell || (fish1 < 0 && currentPrice >= bbUpper && rsi > 70)) {
+        recommendation = 'SAT';
+    }
+    // Trend Takibi (AL yönlü trend devamı)
+    else if (fish1 > fish2 || (currentPrice > ema7 && isVolBullish)) {
+        recommendation = 'AL';
+    }
+    // Trend Takibi (SAT yönlü trend devamı)
+    else if (fish1 < fish2 || (currentPrice < ema7 && !isVolBullish)) {
         recommendation = 'SAT';
     }
 
@@ -253,15 +259,15 @@ const calculateIndicators = (history, currentPrice, symbol) => {
     };
 };
 
+// Gerçek piyasa verilerini Yahoo Finance üzerinden çekme fonksiyonu
 const fetchRealMarketData = async () => {
     try {
         if (!isAtlasOnline || mongoose.connection.readyState !== 1) return;
 
         const now = new Date();
-        const currentDate = now.toLocaleDateString('tr-TR');
         const symbols = marketData.map(s => s.symbol);
 
-        // Tüm hisselerin güncel fiyatlarını TEK seferde çek (Toplu Sorgu)
+        // Güncel fiyatları çek
         const quotes = await yahooFinance.quote(symbols);
         const updatedMarketData = [];
 
@@ -275,38 +281,37 @@ const fetchRealMarketData = async () => {
 
                 const newPrice = quote.regularMarketPrice;
                 const prevClose = quote.regularMarketPreviousClose || newPrice;
-
                 const change = newPrice - prevClose;
                 const changePercent = (change / prevClose) * 100;
 
-                let history = stock.priceHistory || [];
+                // Saatlik veri çekme mantığı (İndikatörler için)
+                const startDate = new Date();
+                startDate.setDate(startDate.getDate() - 7); // Son 1 haftalık veri indikatörler için yeterli
 
-                // İndikatörler için geçmiş verisi eksikse çek (Sadece ilk seferde veya veri azsa)
-                if (history.length < 30) {
-                    const startDate = new Date();
-                    startDate.setDate(startDate.getDate() - 40);
-                    const historicalData = await yahooFinance.historical(stock.symbol, {
-                        period1: startDate,
-                        interval: '1d'
-                    });
+                const hourlyData = await yahooFinance.historical(stock.symbol, {
+                    period1: startDate,
+                    interval: '1h'
+                });
 
-                    history = historicalData.map(h => ({
-                        time: h.date.toLocaleTimeString(),
-                        price: h.close,
-                        volume: h.volume,
-                        high: h.high,
-                        low: h.low
-                    }));
-                }
+                let history = hourlyData.map(h => ({
+                    time: h.date.toLocaleTimeString(),
+                    price: h.close,
+                    volume: h.volume,
+                    high: h.high,
+                    low: h.low
+                }));
 
-                // Yeni fiyat Snapshot'ını ekle (20 saniyede bir)
-                history = [...history, {
+                // Anlık fiyatı geçmişe ekle (En son barı güncelle veya yeni bar olarak ekle)
+                history.push({
                     time: now.toLocaleTimeString(),
                     price: newPrice,
                     volume: quote.regularMarketVolume,
                     high: quote.regularMarketDayHigh,
                     low: quote.regularMarketDayLow
-                }].slice(-60);
+                });
+
+                // Son 60 saati tut
+                history = history.slice(-60);
 
                 const indicators = calculateIndicators(history, newPrice, stock.symbol);
 
@@ -320,19 +325,18 @@ const fetchRealMarketData = async () => {
                     indicators
                 });
             } catch (err) {
-                console.error(`Error processing ${stock.symbol}:`, err.message);
+                console.error(`${stock.symbol} verisi işlenirken hata:`, err.message);
                 updatedMarketData.push(stock);
             }
         }
 
         marketData = updatedMarketData;
 
-        // 2. Kullanıcı İşlemleri ve Botlar
+        // Kullanıcı işlemleri ve botları yönet
         const usersToProcess = await User.find({});
         for (let user of usersToProcess) {
             let userChanged = false;
 
-            // Botları Çalıştır
             const botConfigs = user.botConfigs;
             if (botConfigs) {
                 const entries = (botConfigs instanceof Map) ? botConfigs.entries() : Object.entries(botConfigs);
@@ -342,7 +346,9 @@ const fetchRealMarketData = async () => {
                         if (!stock) continue;
 
                         const rec = stock.indicators?.recommendation;
-                        if (rec === 'GÜÇLÜ AL') {
+
+                        // AL Sinyali İşleme
+                        if (rec === 'AL') {
                             const stockCost = stock.price * (config.amount || 1);
                             const commission = stockCost * COMMISSION_RATE;
                             const totalCost = stockCost + commission;
@@ -370,27 +376,50 @@ const fetchRealMarketData = async () => {
                                 });
                                 userChanged = true;
                             }
-                        } else {
+                        }
+                        // SAT Sinyali İşleme
+                        else if (rec === 'SAT') {
+                            const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
+                            if (stockInPortfolio && stockInPortfolio.amount > 0) {
+                                const sellAmount = stockInPortfolio.amount; // TÜMÜNÜ SAT
+                                const stockRevenue = stock.price * sellAmount;
+                                const commission = stockRevenue * COMMISSION_RATE;
+                                const netRevenue = stockRevenue - commission;
+
+                                user.balance += netRevenue;
+                                user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
+                                user.markModified('portfolio');
+
+                                user.history.unshift({
+                                    id: Date.now() + Math.random(),
+                                    type: 'SATIM',
+                                    symbol: stock.symbol,
+                                    amount: sellAmount,
+                                    price: stock.price,
+                                    commission: commission,
+                                    total: netRevenue,
+                                    date: new Date().toLocaleString('tr-TR'),
+                                    isAuto: true,
+                                    reason: '4\'lü İndikatör Sinyali'
+                                });
+                                userChanged = true;
+                            }
+                        }
+                        // Stop-Loss ve Take-Profit Kontrolleri (İkincil tetikleyiciler)
+                        else {
                             const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
                             if (stockInPortfolio) {
                                 const profitPercent = ((stock.price - stockInPortfolio.averageCost) / stockInPortfolio.averageCost) * 100;
-                                const shouldSellSL = config.stopLoss && profitPercent <= -Math.abs(config.stopLoss);
-                                const shouldSellTP = config.takeProfit && profitPercent >= Math.abs(config.takeProfit);
-                                const shouldSellSignal = rec === 'GÜÇLÜ SAT';
+                                const isSL = config.stopLoss && profitPercent <= -Math.abs(config.stopLoss);
+                                const isTP = config.takeProfit && profitPercent >= Math.abs(config.takeProfit);
 
-                                if (shouldSellSignal || shouldSellSL || shouldSellTP) {
+                                if (isSL || isTP) {
                                     const sellAmount = stockInPortfolio.amount;
                                     const stockRevenue = stock.price * sellAmount;
                                     const commission = stockRevenue * COMMISSION_RATE;
                                     const netRevenue = stockRevenue - commission;
 
                                     user.balance += netRevenue;
-                                    stockInPortfolio.amount = 0;
-
-                                    let reason = 'Sinyal';
-                                    if (shouldSellSL) reason = 'Stop-Loss';
-                                    else if (shouldSellTP) reason = 'Take-Profit';
-
                                     user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
                                     user.markModified('portfolio');
 
@@ -404,7 +433,7 @@ const fetchRealMarketData = async () => {
                                         total: netRevenue,
                                         date: new Date().toLocaleString('tr-TR'),
                                         isAuto: true,
-                                        reason: reason
+                                        reason: isSL ? 'Stop-Loss' : 'Take-Profit'
                                     });
                                     userChanged = true;
                                 }
@@ -464,7 +493,7 @@ app.get('/api/market', (req, res) => res.json(marketData));
 
 app.get('/api/user/data', async (req, res) => {
     const username = req.headers['x-user']?.toLowerCase();
-    if (!username) return res.status(401).json({ error: 'Auth required' });
+    if (!username) return res.status(401).json({ error: 'Yetkilendirme gerekli' });
 
     try {
         if (!isAtlasOnline) return res.status(503).json({ error: 'Veritabanı bağlantısı yok' });
@@ -511,7 +540,7 @@ app.get('/api/user/data', async (req, res) => {
             userUpdated = true;
         }
 
-        // Calculate Extended Stats
+        // Genişletilmiş İstatistikleri Hesapla
         const history = user.history || [];
         const sellTrades = history.filter(t => t.type === 'SATIM');
 
@@ -550,14 +579,14 @@ app.get('/api/user/data', async (req, res) => {
 
         return res.json(user);
     } catch (err) {
-        console.error('User Data API Error:', err);
-        res.status(500).json({ error: 'Server error' });
+        console.error('Kullanıcı Verisi API Hatası:', err);
+        res.status(500).json({ error: 'Sunucu hatası' });
     }
 });
 
 app.post('/api/trade/buy', async (req, res) => {
     const username = req.headers['x-user']?.toLowerCase();
-    if (!username) return res.status(401).json({ error: 'Auth required' });
+    if (!username) return res.status(401).json({ error: 'Yetkilendirme gerekli' });
 
     const { symbol, amount } = req.body;
     const stock = marketData.find(s => s.symbol === symbol);
@@ -599,14 +628,14 @@ app.post('/api/trade/buy', async (req, res) => {
         await user.save();
         res.json({ success: true, data: user });
     } catch (err) {
-        console.error('Buy Trade Error:', err);
-        res.status(500).json({ success: false, message: 'Server error' });
+        console.error('Alım İşlemi Hatası:', err);
+        res.status(500).json({ success: false, message: 'Sunucu hatası' });
     }
 });
 
 app.post('/api/trade/sell', async (req, res) => {
     const username = req.headers['x-user']?.toLowerCase();
-    if (!username) return res.status(401).json({ error: 'Auth required' });
+    if (!username) return res.status(401).json({ error: 'Yetkilendirme gerekli' });
 
     const { symbol, amount } = req.body;
     try {
@@ -645,14 +674,14 @@ app.post('/api/trade/sell', async (req, res) => {
         await user.save();
         res.json({ success: true, data: user });
     } catch (err) {
-        console.error('Sell Trade Error:', err);
-        res.status(500).json({ success: false, message: 'Server error' });
+        console.error('Satım İşlemi Hatası:', err);
+        res.status(500).json({ success: false, message: 'Sunucu hatası' });
     }
 });
 
 app.post('/api/user/reset', async (req, res) => {
     const username = req.headers['x-user']?.toLowerCase();
-    if (!username) return res.status(401).json({ error: 'Auth required' });
+    if (!username) return res.status(401).json({ error: 'Yetkilendirme gerekli' });
 
     try {
         if (!isAtlasOnline) return res.status(503).json({ error: 'Veritabanı bağlantısı yok' });
@@ -671,15 +700,15 @@ app.post('/api/user/reset', async (req, res) => {
         }
         res.json({ success: true, data: user });
     } catch (err) {
-        console.error('Reset Error:', err);
-        res.status(500).json({ success: false, message: 'Server error' });
+        console.error('Sıfırlama Hatası:', err);
+        res.status(500).json({ success: false, message: 'Sunucu hatası' });
     }
 });
 
 
 app.post('/api/bot/config', async (req, res) => {
     const username = req.headers['x-user']?.toLowerCase();
-    if (!username) return res.status(401).json({ error: 'Auth required' });
+    if (!username) return res.status(401).json({ error: 'Yetkilendirme gerekli' });
 
     const { symbol, config } = req.body;
     try {
@@ -703,9 +732,9 @@ app.post('/api/bot/config', async (req, res) => {
 
         res.json({ success: true, data: responseData });
     } catch (err) {
-        console.error('Bot Config Error:', err);
-        res.status(500).json({ success: false, message: 'Server error' });
+        console.error('Bot Ayar Hatası:', err);
+        res.status(500).json({ success: false, message: 'Sunucu hatası' });
     }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Sunucu ${PORT} portunda çalışıyor`));

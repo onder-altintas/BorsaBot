@@ -323,19 +323,19 @@ function App() {
             const periods = [
               {
                 label: 'Günlük', icon: '📅', profit: profitDaily, volume: volumeDaily,
-                sub: wealthSnapshots?.dayStart?.date ? `Başlangıç: ₺${dayStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Henüz snapshot yok'
+                sub: wealthSnapshots?.dayStart?.date ? `Bugün Başlangıç: ₺${dayStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Veriler hazırlanıyor...'
               },
               {
                 label: 'Haftalık', icon: '📆', profit: profitWeekly, volume: volumeWeekly,
-                sub: wealthSnapshots?.weekStart?.date ? `Başlangıç: ₺${weekStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Henüz snapshot yok'
+                sub: wealthSnapshots?.weekStart?.date ? `Hafta Başı: ₺${weekStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Veriler hazırlanıyor...'
               },
               {
                 label: 'Aylık', icon: '🗓️', profit: profitMonthly, volume: volumeMonthly,
-                sub: wealthSnapshots?.monthStart?.date ? `Başlangıç: ₺${monthStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Henüz snapshot yok'
+                sub: wealthSnapshots?.monthStart?.date ? `Ay Başı: ₺${monthStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Veriler hazırlanıyor...'
               },
               {
                 label: 'Yıllık', icon: '⏳', profit: profitYearly, volume: volumeYearly,
-                sub: wealthSnapshots?.yearStart?.date ? `Başlangıç: ₺${yearStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Henüz snapshot yok'
+                sub: wealthSnapshots?.yearStart?.date ? `Yıl Başı: ₺${yearStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Veriler hazırlanıyor...'
               },
             ];
 

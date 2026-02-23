@@ -351,6 +351,47 @@ app.get('/api/user/data', async (req, res) => {
             user = await User.create(getInitialUserData(username));
         }
 
+        // --- Snapshot İyileştirmesi: Veri istendiğinde snapshot yoksa hemen oluştur ---
+        const now = new Date();
+        const todayStr = now.toLocaleDateString('tr-TR');
+        const monthStr = `${now.getFullYear()}-${now.getMonth() + 1}`;
+        const yearStr = `${now.getFullYear()}`;
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+        const weekStr = weekStart.toLocaleDateString('tr-TR');
+
+        if (!user.wealthSnapshots) user.wealthSnapshots = {};
+
+        const currentPortfolioValue = user.portfolio.reduce((acc, item) => {
+            const mStock = marketData.find(s => s.symbol === item.symbol);
+            return acc + (mStock ? mStock.price * item.amount : 0);
+        }, 0);
+        const totalWealth = user.balance + currentPortfolioValue;
+
+        let needsSave = false;
+        if (!user.wealthSnapshots.dayStart || user.wealthSnapshots.dayStart.date !== todayStr) {
+            user.wealthSnapshots.dayStart = { date: todayStr, wealth: totalWealth };
+            needsSave = true;
+        }
+        if (!user.wealthSnapshots.weekStart || user.wealthSnapshots.weekStart.date !== weekStr) {
+            user.wealthSnapshots.weekStart = { date: weekStr, wealth: totalWealth };
+            needsSave = true;
+        }
+        if (!user.wealthSnapshots.monthStart || user.wealthSnapshots.monthStart.date !== monthStr) {
+            user.wealthSnapshots.monthStart = { date: monthStr, wealth: totalWealth };
+            needsSave = true;
+        }
+        if (!user.wealthSnapshots.yearStart || user.wealthSnapshots.yearStart.date !== yearStr) {
+            user.wealthSnapshots.yearStart = { date: yearStr, wealth: totalWealth };
+            needsSave = true;
+        }
+
+        if (needsSave) {
+            user.markModified('wealthSnapshots');
+            await user.save();
+        }
+        // ---------------------------------------------------------------------------
+
         // Calculate Extended Stats
         const history = user.history || [];
         const sellTrades = history.filter(t => t.type === 'SATIM');

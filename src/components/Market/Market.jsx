@@ -14,9 +14,10 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                     <span>Sembol</span>
                     <span>Fiyat</span>
                     <span>Değişim</span>
+                    <span>EMA 7</span>
                     <span>RSI</span>
                     <span>BB (Üst/Alt)</span>
-                    <span>MACD</span>
+                    <span>Fisher</span>
                     <span>Öneri</span>
                     <span>İşlem</span>
                 </div>
@@ -42,8 +43,11 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                             <div className="stock-price font-bold">
                                 ₺{stock.price.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
                             </div>
-                            <div className={`stock-change ${stock.change >= 0 ? 'text-success' : 'text-error'}`}>
+                            <div className="stock-change ${stock.change >= 0 ? 'text-success' : 'text-error'}">
                                 {stock.change >= 0 ? '+' : ''}{stock.changePercent}%
+                            </div>
+                            <div className="stock-ema font-bold text-accent">
+                                {stock.indicators?.ema7?.toFixed(1) || '0.0'}
                             </div>
                             <div className={`stock-rsi font-bold ${rsiColor}`}>
                                 {rsiValue.toFixed(1)}
@@ -56,8 +60,9 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                                     {stock.indicators?.bollinger?.lower?.toFixed(1) || '0.0'}
                                 </div>
                             </div>
-                            <div className={`stock-macd font-bold text-xs ${(stock.indicators?.macd?.line || 0) >= 0 ? 'text-success' : 'text-error'}`}>
-                                {stock.indicators?.macd?.line?.toFixed(2) || '0.00'}
+                            <div className={`stock-fisher font-bold text-xs ${(stock.indicators?.fisher?.val1 || 0) >= (stock.indicators?.fisher?.val2 || 0) ? 'text-success' : 'text-error'}`}>
+                                {stock.indicators?.fisher?.val1?.toFixed(2) || '0.00'}/
+                                {stock.indicators?.fisher?.val2?.toFixed(2) || '0.00'}
                             </div>
                             <div className="stock-recommendation">
                                 <span className={`recommendation-badge ${recClass}`}>

@@ -115,9 +115,13 @@ const calculateEMA = (data, period) => {
     return ema;
 };
 
-const calculateIndicators = (history, currentPrice) => {
-    if (history.length < 2) return { sma5: 0, sma10: 0, rsi: 50, recommendation: 'TUT', macd: { line: 0, signal: 0, hist: 0 }, bollinger: { upper: 0, middle: 0, lower: 0 } };
+const calculateIndicators = (history, currentPrice, symbol) => {
+    if (history.length < 2) return { sma5: 0, sma10: 0, ema7: 0, rsi: 50, recommendation: 'TUT', macd: { line: 0, signal: 0, hist: 0 }, bollinger: { upper: 0, middle: 0, lower: 0 }, fisher: { val1: 0, val2: 0 } };
     const prices = history.map(h => h.price);
+    const volumes = history.map(h => h.volume || 0);
+
+    // EMA 7
+    const ema7 = calculateEMA(prices, 7);
 
     // SMA
     const sma5 = prices.slice(-5).reduce((a, b) => a + b, 0) / Math.min(prices.length, 5);
@@ -148,18 +152,49 @@ const calculateIndicators = (history, currentPrice) => {
     const bbUpper = bbMiddle + (stdDev * 2);
     const bbLower = bbMiddle - (stdDev * 2);
 
-    let recommendation = 'TUT';
-    const isBullish = macdLine > macdSignal && currentPrice > sma5 && rsi < 70;
-    const isBearish = macdLine < macdSignal && currentPrice < sma5 && rsi > 30;
+    // --- 4'LÜ KOMBO ÖZEL: FISHER TRANSFORM (9) ---
+    const fishLen = 9;
+    const fishPrices = history.slice(-fishLen).map(h => (h.high + h.low) / 2 || h.price); // HL2 if exists, else price
+    const high_ = Math.max(...fishPrices);
+    const low_ = Math.min(...fishPrices);
 
-    if (rsi < 30 && currentPrice <= bbLower) recommendation = 'GÜÇLÜ AL';
-    else if (isBullish || rsi < 40) recommendation = 'AL';
-    else if (rsi > 70 && currentPrice >= bbUpper) recommendation = 'GÜÇLÜ SAT';
-    else if (isBearish || rsi > 60) recommendation = 'SAT';
+    const roundF = (val) => val > .99 ? .999 : val < -.99 ? -.999 : val;
+
+    // Geçmiş fisher değerini bul (basitlik için son indikatörden alacağız veya 0'dan başlayacak)
+    const prevIndicator = marketData.find(s => s.symbol === symbol)?.indicators;
+    const prevFValue = prevIndicator?.fisherRaw || 0;
+    const prevFish1 = prevIndicator?.fisher?.val1 || 0;
+
+    const currentFValue = roundF(.66 * ((currentPrice - low_) / (Math.max(0.01, high_ - low_)) - .5) + .67 * prevFValue);
+    const fish1 = .5 * Math.log((1 + currentFValue) / (Math.max(0.001, 1 - currentFValue))) + .5 * prevFish1;
+    const fish2 = prevFish1;
+
+    // --- 4'LÜ KOMBO ÖZEL: VOLUME MOMENTUM ---
+    // (Simülasyon bazlı olduğu için basitleştirilmiş momentum)
+    const volSMA25 = volumes.slice(-25).reduce((a, b) => a + b, 0) / Math.min(volumes.length, 25);
+    const currentVol = volumes[volumes.length - 1] || 0;
+    const isVolBullish = currentVol > volSMA25;
+
+    let recommendation = 'TUT';
+
+    // Fisher Kesişimleri (AL/SAT Sinyali)
+    const fBuy = fish1 > fish2 && prevFish1 <= fish2; // crossover
+    const fSell = fish1 < fish2 && prevFish1 >= fish2; // crossunder
+
+    if (fBuy || (fish1 > 0 && currentPrice <= bbLower && rsi < 30)) {
+        recommendation = 'GÜÇLÜ AL';
+    } else if (fish1 > fish2 || (currentPrice > ema7 && isVolBullish)) {
+        recommendation = 'AL';
+    } else if (fSell || (fish1 < 0 && currentPrice >= bbUpper && rsi > 70)) {
+        recommendation = 'GÜÇLÜ SAT';
+    } else if (fish1 < fish2 || (currentPrice < ema7 && !isVolBullish)) {
+        recommendation = 'SAT';
+    }
 
     return {
         sma5: parseFloat(sma5.toFixed(2)),
         sma10: parseFloat(sma10.toFixed(2)),
+        ema7: parseFloat(ema7.toFixed(2)),
         rsi: parseFloat(rsi.toFixed(2)),
         macd: {
             line: parseFloat(macdLine.toFixed(2)),
@@ -171,6 +206,11 @@ const calculateIndicators = (history, currentPrice) => {
             middle: parseFloat(bbMiddle.toFixed(2)),
             lower: parseFloat(bbLower.toFixed(2))
         },
+        fisher: {
+            val1: parseFloat(fish1.toFixed(3)),
+            val2: parseFloat(fish2.toFixed(3))
+        },
+        fisherRaw: currentFValue,
         recommendation
     };
 };
@@ -187,8 +227,8 @@ const executeSimulation = async () => {
             const totalChange = newPrice - stock.basePrice;
             const totalChangePercent = (totalChange / stock.basePrice) * 100;
 
-            const newHistory = [...stock.priceHistory, { time: new Date().toLocaleTimeString(), price: newPrice }].slice(-100);
-            const indicators = calculateIndicators(newHistory, newPrice);
+            const newHistory = [...stock.priceHistory, { time: new Date().toLocaleTimeString(), price: newPrice, volume: Math.random() * 1000 }].slice(-100);
+            const indicators = calculateIndicators(newHistory, newPrice, stock.symbol);
 
             return {
                 ...stock,

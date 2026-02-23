@@ -258,6 +258,11 @@ const calculateIndicators = (history, currentPrice, symbol) => {
         recommendation = 'SAT';
     }
 
+    // GÜVENLİK FİLTRESİ: Eğer bir şekilde 'Güçlü' ifadesi sızarsa temizle
+    if (typeof recommendation === 'string' && recommendation.includes('GÜÇLÜ')) {
+        recommendation = recommendation.replace('GÜÇLÜ ', '');
+    }
+
     return {
         sma5: parseFloat(sma5.toFixed(2)),
         sma10: parseFloat(sma10.toFixed(2)),
@@ -520,7 +525,11 @@ if (isAtlasOnline) {
 }
 
 // API Endpoints
-app.get('/api/market', (req, res) => res.json(marketData));
+app.get('/api/market', (req, res) => res.json({
+    version: '5.1.1',
+    timestamp: Date.now(),
+    data: marketData
+}));
 
 app.get('/api/user/data', async (req, res) => {
     const username = req.headers['x-user']?.toLowerCase();

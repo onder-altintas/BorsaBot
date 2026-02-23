@@ -48,7 +48,14 @@ export const useTrading = (currentUser) => {
             const mData = await marketRes.json();
             const uData = await userRes.json();
 
-            if (marketRes.ok) setMarketData(mData);
+            if (marketRes.ok) {
+                // Backend'den gelen yeni yapıyı (version/data) veya eski yapıyı destekle
+                const stocks = mData.data || mData;
+                setMarketData(stocks);
+                if (mData.version) {
+                    window.backendVersion = mData.version; // Basitlik için window objesine atalım
+                }
+            }
 
             if (userRes.ok && uData && !uData.error) {
                 setBalance(uData.balance ?? 100000);

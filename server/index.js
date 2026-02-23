@@ -309,6 +309,7 @@ const executeSimulation = async () => {
 
                                     // Hepsini sattığımız için portföyden tamamen kaldır
                                     user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
+                                    user.markModified('portfolio');
 
                                     user.history.unshift({
                                         id: Date.now() + Math.random(),
@@ -458,7 +459,11 @@ app.get('/api/user/data', async (req, res) => {
             winRate,
             bestStock,
             totalTrades: history.length,
-            profitableTrades: totalWin
+            profitableTrades: totalWin,
+            // Merkezi Hesaplamalar
+            totalWealth: totalWealth,
+            overallProfit: totalWealth - 100000,
+            overallProfitPercent: (((totalWealth - 100000) / 100000) * 100).toFixed(2)
         };
 
         // Sadece değişiklik varsa kaydet

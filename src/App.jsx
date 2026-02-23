@@ -80,10 +80,10 @@ function App() {
     return acc + (currentPrice * item.amount);
   }, 0) : 0;
 
-  const totalWealth = balance + totalPortfolioValue;
-  const initialWealth = 100000;
-  const totalProfit = totalWealth - initialWealth;
-  const profitPercent = initialWealth > 0 ? ((totalProfit / initialWealth) * 100).toFixed(2) : "0.00";
+  // Merkezi hesaplama (backend'den gelen) öncelikli, yoksa yerel hesapla
+  const totalWealth = stats?.totalWealth || (balance + totalPortfolioValue);
+  const totalProfit = stats?.overallProfit !== undefined ? stats.overallProfit : (totalWealth - 100000);
+  const profitPercent = stats?.overallProfitPercent || (100000 > 0 ? ((totalProfit / 100000) * 100).toFixed(2) : "0.00");
 
   const handleBuy = async (amount) => {
     const result = await buyStock(selectedStock.symbol, amount);
@@ -287,9 +287,10 @@ function App() {
               const mInfo = marketData.find(s => s.symbol === item.symbol);
               return acc + (mInfo ? mInfo.price * item.amount : 0);
             }, 0);
-            const currentWealth = balance + currentPortfolioValue;
 
-            // Snapshot'lardan dönem başı değerleri
+            // Merkezi varlık kullanımı
+            const currentWealth = totalWealth;
+
             // Snapshot'lardan dönem başı değerleri - Eğer yoksa wealthHistory'den veya mevcut varlıktan al
             const getBaseline = (snapshot, fallbackWealth) => snapshot?.wealth || (wealthHistory.length > 0 ? wealthHistory[0].wealth : fallbackWealth);
 

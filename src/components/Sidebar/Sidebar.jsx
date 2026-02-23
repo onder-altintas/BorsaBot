@@ -75,7 +75,7 @@ const Sidebar = ({ activeTab, setActiveTab, onLogout, onReset, isOpen, onClose }
         </div>
 
         <div className="sidebar-version">
-          <span>v3.0.0</span>
+          <span>v4.0.1</span>
         </div>
       </div>
     </>

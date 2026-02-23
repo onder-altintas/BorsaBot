@@ -587,8 +587,8 @@ app.post('/api/user/reset', async (req, res) => {
             user.history = initialData.history;
             user.wealthHistory = initialData.wealthHistory;
             user.stats = initialData.stats;
-            // Snapshot'ları sıfırla — simülasyon 3 sn içinde yeni snapshot kaydeder
-            user.wealthSnapshots = {};
+            // Snapshot'ları standart başlangıç değerlerine (100.000 TL) geri döndür
+            user.wealthSnapshots = initialData.wealthSnapshots;
             user.markModified('wealthSnapshots');
             await user.save();
         }

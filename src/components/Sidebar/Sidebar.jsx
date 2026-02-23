@@ -73,6 +73,10 @@ const Sidebar = ({ activeTab, setActiveTab, onLogout, onReset, isOpen, onClose }
           <SidebarItem icon={Settings} label="Ayarlar" onClick={() => setActiveTab('bots')} />
           <SidebarItem icon={LogOut} label="Çıkış Yap" onClick={onLogout} />
         </div>
+
+        <div className="sidebar-version">
+          <span>v3.0.0</span>
+        </div>
       </div>
     </>
   );

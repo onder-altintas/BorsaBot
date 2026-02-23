@@ -111,3 +111,12 @@
         left: 0;
     }
 }
+
+.sidebar-version {
+    padding: 0.5rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-family: monospace;
+    opacity: 0.6;
+    margin-top: 0.5rem;
+}

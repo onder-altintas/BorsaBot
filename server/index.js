@@ -9,8 +9,9 @@ const User = require('./models/User');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Database State
 let isAtlasOnline = false;
+let lastMarketUpdate = 0;
+const UPDATE_INTERVAL = 20000; // 20 saniye
 
 // MongoDB Connection with improved error handling
 const connectDB = async () => {
@@ -52,9 +53,17 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// İstek Günlükçü Middleware
-app.use((req, res, next) => {
+// İstek Günlükçü ve Vercel-Bot Tetikleyici Middleware
+app.use(async (req, res, next) => {
     console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url} - Kullanıcı: ${req.headers['x-user'] || 'Misafir'}`);
+
+    // Vercel'de setInterval sürekli çalışmaz, bu yüzden her istekte veri tazeliğini kontrol et
+    const now = Date.now();
+    if (now - lastMarketUpdate > UPDATE_INTERVAL && isAtlasOnline) {
+        lastMarketUpdate = now;
+        fetchRealMarketData().catch(err => console.error('Auto-trigger fetch error:', err));
+    }
+
     next();
 });
 
@@ -484,9 +493,17 @@ const fetchRealMarketData = async () => {
     }
 };
 
-// Gerçek veri için interval'i biraz artıralım (API limitlerini zorlamamak için)
-setInterval(fetchRealMarketData, 20000);
-fetchRealMarketData(); // Başlangıçta hemen çek
+// Vercel Serverless ortamında setInterval yerine istek tabanlı tetikleme (yukarıdaki middleware) kullanılır.
+// Ancak yerel çalışmada hala setInterval kullanılabilir.
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    setInterval(fetchRealMarketData, UPDATE_INTERVAL);
+}
+
+// Başlatırken bir kez veri çekmeyi dene
+if (isAtlasOnline) {
+    fetchRealMarketData();
+    lastMarketUpdate = Date.now();
+}
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json(marketData));
@@ -737,4 +754,8 @@ app.post('/api/bot/config', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => console.log(`Sunucu ${PORT} portunda çalışıyor`));
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    app.listen(PORT, () => console.log(`Sunucu ${PORT} portunda çalışıyor`));
+}
+
+module.exports = app;

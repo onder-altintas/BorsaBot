@@ -280,13 +280,15 @@ function App() {
             const dayStartWealth = wealthSnapshots?.dayStart?.wealth ?? currentWealth;
             const weekStartWealth = wealthSnapshots?.weekStart?.wealth ?? currentWealth;
             const monthStartWealth = wealthSnapshots?.monthStart?.wealth ?? currentWealth;
+            const yearStartWealth = wealthSnapshots?.yearStart?.wealth ?? currentWealth;
 
             const profitDaily = currentWealth - dayStartWealth;
             const profitWeekly = currentWealth - weekStartWealth;
             const profitMonthly = currentWealth - monthStartWealth;
+            const profitYearly = currentWealth - yearStartWealth;
 
             // İşlem hacmi ve komisyon — history'den
-            let volumeDaily = 0, volumeWeekly = 0, volumeMonthly = 0;
+            let volumeDaily = 0, volumeWeekly = 0, volumeMonthly = 0, volumeYearly = 0;
             let commissionTotal = 0;
 
             const now = new Date();
@@ -294,6 +296,7 @@ function App() {
             const startOfWeek = new Date(startOfDay);
             startOfWeek.setDate(startOfDay.getDate() - ((startOfDay.getDay() + 6) % 7));
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const startOfYear = new Date(now.getFullYear(), 0, 1);
 
             const parseTradeDate = (dateStr) => {
               if (!dateStr) return null;
@@ -310,6 +313,7 @@ function App() {
               if (tradeDate && tradeDate >= startOfDay) volumeDaily += vol;
               if (tradeDate && tradeDate >= startOfWeek) volumeWeekly += vol;
               if (tradeDate && tradeDate >= startOfMonth) volumeMonthly += vol;
+              if (tradeDate && tradeDate >= startOfYear) volumeYearly += vol;
             });
 
             const fmtMoney = (val) => `₺${Math.abs(val).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
@@ -328,6 +332,10 @@ function App() {
               {
                 label: 'Aylık', icon: '🗓️', profit: profitMonthly, volume: volumeMonthly,
                 sub: wealthSnapshots?.monthStart?.date ? `Başlangıç: ₺${monthStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Henüz snapshot yok'
+              },
+              {
+                label: 'Yıllık', icon: '⏳', profit: profitYearly, volume: volumeYearly,
+                sub: wealthSnapshots?.yearStart?.date ? `Başlangıç: ₺${yearStartWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : 'Henüz snapshot yok'
               },
             ];
 

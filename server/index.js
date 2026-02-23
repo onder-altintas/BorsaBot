@@ -302,6 +302,8 @@ const executeSimulation = async () => {
 
             if (!user.wealthSnapshots) user.wealthSnapshots = {};
 
+            const yearStr = `${now.getFullYear()}`;
+
             if (!user.wealthSnapshots.dayStart || user.wealthSnapshots.dayStart.date !== todayStr) {
                 user.wealthSnapshots.dayStart = { date: todayStr, wealth: totalWealth };
                 user.markModified('wealthSnapshots');
@@ -312,6 +314,10 @@ const executeSimulation = async () => {
             }
             if (!user.wealthSnapshots.monthStart || user.wealthSnapshots.monthStart.date !== monthStr) {
                 user.wealthSnapshots.monthStart = { date: monthStr, wealth: totalWealth };
+                user.markModified('wealthSnapshots');
+            }
+            if (!user.wealthSnapshots.yearStart || user.wealthSnapshots.yearStart.date !== yearStr) {
+                user.wealthSnapshots.yearStart = { date: yearStr, wealth: totalWealth };
                 user.markModified('wealthSnapshots');
             }
 

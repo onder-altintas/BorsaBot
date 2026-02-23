@@ -28,7 +28,8 @@ const UserSchema = new mongoose.Schema({
     wealthSnapshots: {
         dayStart: { date: String, wealth: Number },
         weekStart: { date: String, wealth: Number },
-        monthStart: { date: String, wealth: Number }
+        monthStart: { date: String, wealth: Number },
+        yearStart: { date: String, wealth: Number }
     },
     botConfigs: {
         type: Map,

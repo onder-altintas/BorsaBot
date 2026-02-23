@@ -65,6 +65,12 @@ const getInitialUserData = (username) => ({
     portfolio: [],
     history: [],
     wealthHistory: [{ time: new Date().toLocaleTimeString(), wealth: 100000 }],
+    wealthSnapshots: {
+        dayStart: { date: new Date().toLocaleDateString('tr-TR'), wealth: 100000 },
+        weekStart: { date: new Date().toLocaleDateString('tr-TR'), wealth: 100000 },
+        monthStart: { date: `${new Date().getFullYear()}-${new Date().getMonth() + 1}`, wealth: 100000 },
+        yearStart: { date: `${new Date().getFullYear()}`, wealth: 100000 }
+    },
     botConfigs: {},
     stats: { winRate: 0, bestStock: '-', totalTrades: 0, profitableTrades: 0 }
 });

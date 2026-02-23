@@ -277,10 +277,13 @@ function App() {
             const currentWealth = balance + currentPortfolioValue;
 
             // Snapshot'lardan dönem başı değerleri
-            const dayStartWealth = wealthSnapshots?.dayStart?.wealth ?? currentWealth;
-            const weekStartWealth = wealthSnapshots?.weekStart?.wealth ?? currentWealth;
-            const monthStartWealth = wealthSnapshots?.monthStart?.wealth ?? currentWealth;
-            const yearStartWealth = wealthSnapshots?.yearStart?.wealth ?? currentWealth;
+            // Snapshot'lardan dönem başı değerleri - Eğer yoksa wealthHistory'den veya mevcut varlıktan al
+            const getBaseline = (snapshot, fallbackWealth) => snapshot?.wealth || (wealthHistory.length > 0 ? wealthHistory[0].wealth : fallbackWealth);
+
+            const dayStartWealth = getBaseline(wealthSnapshots?.dayStart, currentWealth);
+            const weekStartWealth = getBaseline(wealthSnapshots?.weekStart, currentWealth);
+            const monthStartWealth = getBaseline(wealthSnapshots?.monthStart, currentWealth);
+            const yearStartWealth = getBaseline(wealthSnapshots?.yearStart, currentWealth);
 
             const profitDaily = currentWealth - dayStartWealth;
             const profitWeekly = currentWealth - weekStartWealth;

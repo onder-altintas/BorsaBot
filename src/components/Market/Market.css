@@ -41,11 +41,6 @@
     min-width: 80px;
 }
 
-.badge-strong-buy {
-    background-color: #059669;
-    color: white;
-}
-
 .badge-buy {
     background-color: #10b981;
     color: white;
@@ -58,11 +53,6 @@
 
 .badge-sell {
     background-color: #f43f5e;
-    color: white;
-}
-
-.badge-strong-sell {
-    background-color: #e11d48;
     color: white;
 }
 

@@ -221,26 +221,40 @@ const calculateIndicators = (history, currentPrice, symbol) => {
     const currentVol = volumes[volumes.length - 1] || 0;
     const isVolBullish = currentVol > volSMA25;
 
+    // --- 4'LÜ KONSENSÜS SİNYAL MANTİĞI (SAATLİK VERİ BAZLI) ---
+    // Bu mantık Fisher, EMA7, RSI ve Bollinger Bantlarının ortak kararına bakar.
+
+    let buyScore = 0;
+    let sellScore = 0;
+
+    // 1. Fisher Transform (Hızlı Kesişim ve Trend)
+    if (fish1 > fish2) buyScore++;
+    else if (fish1 < fish2) sellScore++;
+
+    // 2. EMA 7 (Trend Altı/Üstü)
+    if (currentPrice > ema7) buyScore++;
+    else if (currentPrice < ema7) sellScore++;
+
+    // 3. RSI 14 (Aşırı Alım/Satım ve Orta Hat)
+    if (rsi > 50) buyScore++;
+    else if (rsi < 50) sellScore++;
+    // Ekstra ağırlık: Aşırı bölgeler
+    if (rsi < 35) buyScore++;
+    if (rsi > 65) sellScore++;
+
+    // 4. Bollinger Bantları (Konum)
+    if (currentPrice < bbMiddle) buyScore++; // Orta bandın altında (Alım fırsatı)
+    if (currentPrice > bbMiddle) sellScore++; // Orta bandın üstünde (Satış fırsatı)
+    // Ekstra ağırlık: Bant dışına taşmalar
+    if (currentPrice <= bbLower) buyScore++;
+    if (currentPrice >= bbUpper) sellScore++;
+
     let recommendation = 'TUT';
 
-    // Fisher Kesişimleri ve 4'lü İndikatör Sinyal Mantığı
-    const fBuy = fish1 > fish2 && prevFish1 <= fish2;
-    const fSell = fish1 < fish2 && prevFish1 >= fish2;
-
-    // Alış Şartı (Sadece 4'lü İndikatör Bazlı)
-    if (fBuy || (fish1 > 0 && currentPrice <= bbLower && rsi < 30)) {
+    // Konsensüs Kararı: Skor 3 ve üzeri ise sinyal üret
+    if (buyScore >= 3 && buyScore > sellScore) {
         recommendation = 'AL';
-    }
-    // Satış Şartı (Sadece 4'lü İndikatör Bazlı)
-    else if (fSell || (fish1 < 0 && currentPrice >= bbUpper && rsi > 70)) {
-        recommendation = 'SAT';
-    }
-    // Trend Takibi (AL yönlü trend devamı)
-    else if (fish1 > fish2 || (currentPrice > ema7 && isVolBullish)) {
-        recommendation = 'AL';
-    }
-    // Trend Takibi (SAT yönlü trend devamı)
-    else if (fish1 < fish2 || (currentPrice < ema7 && !isVolBullish)) {
+    } else if (sellScore >= 3 && sellScore > buyScore) {
         recommendation = 'SAT';
     }
 

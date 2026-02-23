@@ -89,9 +89,12 @@ const BIST_STOCK_SYMBOLS = [
     { symbol: 'BIMAS', name: 'BİM Mağazalar', basePrice: 388.00 },
 ];
 
+let lastSimDate = new Date().toLocaleDateString('tr-TR');
+
 let marketData = BIST_STOCK_SYMBOLS.map(stock => ({
     ...stock,
     price: stock.basePrice,
+    dayStartPrice: stock.basePrice,
     change: 0,
     changePercent: 0,
     priceHistory: [{ time: new Date().toLocaleTimeString(), price: stock.basePrice }],
@@ -219,13 +222,34 @@ const executeSimulation = async () => {
     try {
         if (!isAtlasOnline || mongoose.connection.readyState !== 1) return;
 
+        // Gün değişimi kontrolü (Baz fiyat sıfırlama)
+        const currentDate = new Date().toLocaleDateString('tr-TR');
+        if (currentDate !== lastSimDate) {
+            marketData = marketData.map(s => ({ ...s, dayStartPrice: s.price }));
+            lastSimDate = currentDate;
+            console.log(`[${new Date().toLocaleTimeString()}] Yeni gün simülasyonu: Baz fiyatlar güncellendi.`);
+        }
+
         // 1. Update Market Data
         marketData = marketData.map(stock => {
             const volatility = 0.002;
             const change = (Math.random() - 0.5) * 2 * volatility * stock.price;
-            const newPrice = parseFloat((stock.price + change).toFixed(2));
-            const totalChange = newPrice - stock.basePrice;
-            const totalChangePercent = (totalChange / stock.basePrice) * 100;
+            let newPrice = parseFloat((stock.price + change).toFixed(2));
+
+            // --- BIST STANDARTI: %10 SINIRLAMASI (Devre Kesici) ---
+            // Değişimi 'dayStartPrice' (Gün Başı Fiyatı) üzerinden hesaplayalım.
+            // Eğer dayStartPrice yoksa (ilk çalışma), mevcut basePrice'ı al.
+            if (!stock.dayStartPrice) stock.dayStartPrice = stock.basePrice;
+
+            const maxLimit = stock.dayStartPrice * 1.10;
+            const minLimit = stock.dayStartPrice * 0.90;
+
+            if (newPrice > maxLimit) newPrice = maxLimit;
+            if (newPrice < minLimit) newPrice = minLimit;
+
+            newPrice = parseFloat(newPrice.toFixed(2));
+            const totalChange = newPrice - stock.dayStartPrice;
+            const totalChangePercent = (totalChange / stock.dayStartPrice) * 100;
 
             const newHistory = [...stock.priceHistory, { time: new Date().toLocaleTimeString(), price: newPrice, volume: Math.random() * 1000 }].slice(-100);
             const indicators = calculateIndicators(newHistory, newPrice, stock.symbol);
@@ -233,6 +257,7 @@ const executeSimulation = async () => {
             return {
                 ...stock,
                 price: newPrice,
+                dayStartPrice: stock.dayStartPrice,
                 change: parseFloat(totalChange.toFixed(2)),
                 changePercent: parseFloat(totalChangePercent.toFixed(2)),
                 priceHistory: newHistory,

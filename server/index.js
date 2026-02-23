@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const mongoose = require('mongoose');
+const yahooFinance = require('yahoo-finance2').default;
 const User = require('./models/User');
 
 const app = express();
@@ -19,6 +20,7 @@ const connectDB = async () => {
         });
         isAtlasOnline = true;
         console.log('✅ MongoDB Atlas Bağlantısı Başarılı');
+        await migrateSymbols(); // Run migration after connection
     } catch (err) {
         isAtlasOnline = false;
         console.error('❌ MongoDB Atlas Bağlantısı Başarısız. Uygulama çalışmak için MongoDB bağlantısına ihtiyaç duyuyor.', err.message);
@@ -58,6 +60,40 @@ app.use((req, res, next) => {
 
 const COMMISSION_RATE = 0.0005; // 5/10000 commission rate
 
+// Migration for old symbols
+const migrateSymbols = async () => {
+    try {
+        const users = await User.find({});
+        for (let user of users) {
+            let changed = false;
+            // Portfolio migration
+            user.portfolio = user.portfolio.map(p => {
+                if (!p.symbol.endsWith('.IS')) {
+                    p.symbol = p.symbol + '.IS';
+                    changed = true;
+                }
+                return p;
+            });
+            // History migration
+            user.history = user.history.map(h => {
+                if (h.symbol && !h.symbol.endsWith('.IS')) {
+                    h.symbol = h.symbol + '.IS';
+                    changed = true;
+                }
+                return h;
+            });
+            if (changed) {
+                user.markModified('portfolio');
+                user.markModified('history');
+                await user.save();
+                console.log(`Migrated symbols for user: ${user.username}`);
+            }
+        }
+    } catch (err) {
+        console.error('Migration Error:', err);
+    }
+};
+
 // Helper for initial user
 const getInitialUserData = (username) => ({
     username,
@@ -77,34 +113,33 @@ const getInitialUserData = (username) => ({
 
 // BIST 100 Major Stocks
 const BIST_STOCK_SYMBOLS = [
-    { symbol: 'THYAO', name: 'Türk Hava Yolları', basePrice: 285.50 },
-    { symbol: 'ASELS', name: 'Aselsan', basePrice: 62.20 },
-    { symbol: 'EREGL', name: 'Erdemir', basePrice: 48.15 },
-    { symbol: 'KCHOL', name: 'Koç Holding', basePrice: 175.80 },
-    { symbol: 'SASAn', name: 'Sasa Polyester', basePrice: 38.40 },
-    { symbol: 'TUPRS', name: 'Tüpraş', basePrice: 162.90 },
-    { symbol: 'SISE', name: 'Şişecam', basePrice: 46.30 },
-    { symbol: 'GARAN', name: 'Garanti BBVA', basePrice: 72.40 },
-    { symbol: 'AKBNK', name: 'Akbank', basePrice: 44.10 },
-    { symbol: 'BIMAS', name: 'BİM Mağazalar', basePrice: 388.00 },
+    { symbol: 'THYAO.IS', name: 'Türk Hava Yolları' },
+    { symbol: 'ASELS.IS', name: 'Aselsan' },
+    { symbol: 'EREGL.IS', name: 'Erdemir' },
+    { symbol: 'KCHOL.IS', name: 'Koç Holding' },
+    { symbol: 'SASA.IS', name: 'Sasa Polyester' },
+    { symbol: 'TUPRS.IS', name: 'Tüpraş' },
+    { symbol: 'SISE.IS', name: 'Şişecam' },
+    { symbol: 'GARAN.IS', name: 'Garanti BBVA' },
+    { symbol: 'AKBNK.IS', name: 'Akbank' },
+    { symbol: 'BIMAS.IS', name: 'BİM Mağazalar' },
 ];
-
-let lastSimDate = new Date().toLocaleDateString('tr-TR');
 
 let marketData = BIST_STOCK_SYMBOLS.map(stock => ({
     ...stock,
-    price: stock.basePrice,
-    dayStartPrice: stock.basePrice,
+    price: 0,
+    dayStartPrice: 0,
     change: 0,
     changePercent: 0,
-    priceHistory: [{ time: new Date().toLocaleTimeString(), price: stock.basePrice }],
+    priceHistory: [],
     indicators: {
-        sma5: stock.basePrice,
-        sma10: stock.basePrice,
+        sma5: 0,
+        sma10: 0,
         rsi: 50,
         recommendation: 'TUT',
         macd: { line: 0, signal: 0, hist: 0 },
-        bollinger: { upper: stock.basePrice, middle: stock.basePrice, lower: stock.basePrice }
+        bollinger: { upper: 0, middle: 0, lower: 0 },
+        fisher: { val1: 0, val2: 0 }
     }
 }));
 
@@ -218,64 +253,89 @@ const calculateIndicators = (history, currentPrice, symbol) => {
     };
 };
 
-const executeSimulation = async () => {
+const fetchRealMarketData = async () => {
     try {
         if (!isAtlasOnline || mongoose.connection.readyState !== 1) return;
 
-        // Gün değişimi kontrolü (Baz fiyat sıfırlama)
-        const currentDate = new Date().toLocaleDateString('tr-TR');
-        if (currentDate !== lastSimDate) {
-            marketData = marketData.map(s => ({ ...s, dayStartPrice: s.price }));
-            lastSimDate = currentDate;
-            console.log(`[${new Date().toLocaleTimeString()}] Yeni gün simülasyonu: Baz fiyatlar güncellendi.`);
+        const now = new Date();
+        const currentDate = now.toLocaleDateString('tr-TR');
+        const symbols = marketData.map(s => s.symbol);
+
+        // Tüm hisselerin güncel fiyatlarını TEK seferde çek (Toplu Sorgu)
+        const quotes = await yahooFinance.quote(symbols);
+        const updatedMarketData = [];
+
+        for (const stock of marketData) {
+            try {
+                const quote = quotes.find(q => q.symbol === stock.symbol);
+                if (!quote) {
+                    updatedMarketData.push(stock);
+                    continue;
+                }
+
+                const newPrice = quote.regularMarketPrice;
+                const prevClose = quote.regularMarketPreviousClose || newPrice;
+
+                const change = newPrice - prevClose;
+                const changePercent = (change / prevClose) * 100;
+
+                let history = stock.priceHistory || [];
+
+                // İndikatörler için geçmiş verisi eksikse çek (Sadece ilk seferde veya veri azsa)
+                if (history.length < 30) {
+                    const startDate = new Date();
+                    startDate.setDate(startDate.getDate() - 40);
+                    const historicalData = await yahooFinance.historical(stock.symbol, {
+                        period1: startDate,
+                        interval: '1d'
+                    });
+
+                    history = historicalData.map(h => ({
+                        time: h.date.toLocaleTimeString(),
+                        price: h.close,
+                        volume: h.volume,
+                        high: h.high,
+                        low: h.low
+                    }));
+                }
+
+                // Yeni fiyat Snapshot'ını ekle (20 saniyede bir)
+                history = [...history, {
+                    time: now.toLocaleTimeString(),
+                    price: newPrice,
+                    volume: quote.regularMarketVolume,
+                    high: quote.regularMarketDayHigh,
+                    low: quote.regularMarketDayLow
+                }].slice(-60);
+
+                const indicators = calculateIndicators(history, newPrice, stock.symbol);
+
+                updatedMarketData.push({
+                    ...stock,
+                    price: newPrice,
+                    dayStartPrice: prevClose,
+                    change: parseFloat(change.toFixed(2)),
+                    changePercent: parseFloat(changePercent.toFixed(2)),
+                    priceHistory: history,
+                    indicators
+                });
+            } catch (err) {
+                console.error(`Error processing ${stock.symbol}:`, err.message);
+                updatedMarketData.push(stock);
+            }
         }
 
-        // 1. Update Market Data
-        marketData = marketData.map(stock => {
-            const volatility = 0.002;
-            const change = (Math.random() - 0.5) * 2 * volatility * stock.price;
-            let newPrice = parseFloat((stock.price + change).toFixed(2));
+        marketData = updatedMarketData;
 
-            // --- BIST STANDARTI: %10 SINIRLAMASI (Devre Kesici) ---
-            // Değişimi 'dayStartPrice' (Gün Başı Fiyatı) üzerinden hesaplayalım.
-            // Eğer dayStartPrice yoksa (ilk çalışma), mevcut basePrice'ı al.
-            if (!stock.dayStartPrice) stock.dayStartPrice = stock.basePrice;
-
-            const maxLimit = stock.dayStartPrice * 1.10;
-            const minLimit = stock.dayStartPrice * 0.90;
-
-            if (newPrice > maxLimit) newPrice = maxLimit;
-            if (newPrice < minLimit) newPrice = minLimit;
-
-            newPrice = parseFloat(newPrice.toFixed(2));
-            const totalChange = newPrice - stock.dayStartPrice;
-            const totalChangePercent = (totalChange / stock.dayStartPrice) * 100;
-
-            const newHistory = [...stock.priceHistory, { time: new Date().toLocaleTimeString(), price: newPrice, volume: Math.random() * 1000 }].slice(-100);
-            const indicators = calculateIndicators(newHistory, newPrice, stock.symbol);
-
-            return {
-                ...stock,
-                price: newPrice,
-                dayStartPrice: stock.dayStartPrice,
-                change: parseFloat(totalChange.toFixed(2)),
-                changePercent: parseFloat(totalChangePercent.toFixed(2)),
-                priceHistory: newHistory,
-                indicators
-            };
-        });
-
-        // 2. Identify Users to Process
+        // 2. Kullanıcı İşlemleri ve Botlar
         const usersToProcess = await User.find({});
-
         for (let user of usersToProcess) {
             let userChanged = false;
 
-            // Execute Bots
+            // Botları Çalıştır
             const botConfigs = user.botConfigs;
             if (botConfigs) {
                 const entries = (botConfigs instanceof Map) ? botConfigs.entries() : Object.entries(botConfigs);
-
                 for (let [symbol, config] of entries) {
                     if (config && config.active) {
                         const stock = marketData.find(s => s.symbol === symbol);
@@ -319,20 +379,18 @@ const executeSimulation = async () => {
                                 const shouldSellSignal = rec === 'GÜÇLÜ SAT';
 
                                 if (shouldSellSignal || shouldSellSL || shouldSellTP) {
-                                    // Kullanıcının isteği: Güçlü Sat veya SL/TP durumunda eldeki TÜM hisseleri sat
                                     const sellAmount = stockInPortfolio.amount;
                                     const stockRevenue = stock.price * sellAmount;
                                     const commission = stockRevenue * COMMISSION_RATE;
                                     const netRevenue = stockRevenue - commission;
 
                                     user.balance += netRevenue;
-                                    stockInPortfolio.amount = 0; // Hepsini sattık
+                                    stockInPortfolio.amount = 0;
 
                                     let reason = 'Sinyal';
                                     if (shouldSellSL) reason = 'Stop-Loss';
                                     else if (shouldSellTP) reason = 'Take-Profit';
 
-                                    // Hepsini sattığımız için portföyden tamamen kaldır
                                     user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
                                     user.markModified('portfolio');
 
@@ -356,29 +414,23 @@ const executeSimulation = async () => {
                 }
             }
 
-            // Update Wealth History
+            // Varlık Geçmişini Güncelle
             const currentPortfolioValue = user.portfolio.reduce((acc, item) => {
                 const mStock = marketData.find(s => s.symbol === item.symbol);
                 return acc + (mStock ? mStock.price * item.amount : 0);
             }, 0);
             const totalWealth = user.balance + currentPortfolioValue;
-            user.wealthHistory = [...(user.wealthHistory || []), { time: new Date().toLocaleTimeString(), wealth: totalWealth }].slice(-50);
+            user.wealthHistory = [...(user.wealthHistory || []), { time: now.toLocaleTimeString(), wealth: totalWealth }].slice(-50);
 
-            // Update Wealth Snapshots (günlük / haftalık / aylık dönem başı)
-            const now = new Date();
-            const todayStr = now.toLocaleDateString('tr-TR');
-            const monthStr = `${now.getFullYear()}-${now.getMonth() + 1}`;
-            // Haftanın başı: Pazartesi
+            // Snapshotları Güncelle
+            if (!user.wealthSnapshots) user.wealthSnapshots = {};
             const weekStart = new Date(now);
             weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
             const weekStr = weekStart.toLocaleDateString('tr-TR');
+            const monthStr = `${now.getFullYear()}-${now.getMonth() + 1}`;
 
-            if (!user.wealthSnapshots) user.wealthSnapshots = {};
-
-            const yearStr = `${now.getFullYear()}`;
-
-            if (!user.wealthSnapshots.dayStart || user.wealthSnapshots.dayStart.date !== todayStr) {
-                user.wealthSnapshots.dayStart = { date: todayStr, wealth: totalWealth };
+            if (!user.wealthSnapshots.dayStart || user.wealthSnapshots.dayStart.date !== currentDate) {
+                user.wealthSnapshots.dayStart = { date: currentDate, wealth: totalWealth };
                 user.markModified('wealthSnapshots');
             }
             if (!user.wealthSnapshots.weekStart || user.wealthSnapshots.weekStart.date !== weekStr) {
@@ -389,25 +441,23 @@ const executeSimulation = async () => {
                 user.wealthSnapshots.monthStart = { date: monthStr, wealth: totalWealth };
                 user.markModified('wealthSnapshots');
             }
-            if (!user.wealthSnapshots.yearStart || user.wealthSnapshots.yearStart.date !== yearStr) {
-                user.wealthSnapshots.yearStart = { date: yearStr, wealth: totalWealth };
+            if (!user.wealthSnapshots.yearStart || user.wealthSnapshots.yearStart.date !== `${now.getFullYear()}`) {
+                user.wealthSnapshots.yearStart = { date: `${now.getFullYear()}`, wealth: totalWealth };
                 user.markModified('wealthSnapshots');
             }
 
-            userChanged = true;
-
-            // Save Progress
-            if (userChanged && typeof user.save === 'function') {
+            if (userChanged) {
                 await user.save();
             }
-
         }
     } catch (error) {
-        console.error('Simülasyon Hatası:', error);
+        console.error('Piyasa Verisi Çekme Hatası:', error);
     }
 };
 
-setInterval(executeSimulation, 3000);
+// Gerçek veri için interval'i biraz artıralım (API limitlerini zorlamamak için)
+setInterval(fetchRealMarketData, 20000);
+fetchRealMarketData(); // Başlangıçta hemen çek
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json(marketData));

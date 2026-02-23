@@ -414,29 +414,25 @@ app.get('/api/user/data', async (req, res) => {
         }, 0);
         const totalWealth = user.balance + currentPortfolioValue;
 
-        let needsSave = false;
+        let userUpdated = false;
+
+        // Snapshot Kontrolleri
         if (!user.wealthSnapshots.dayStart || user.wealthSnapshots.dayStart.date !== todayStr) {
             user.wealthSnapshots.dayStart = { date: todayStr, wealth: totalWealth };
-            needsSave = true;
+            userUpdated = true;
         }
         if (!user.wealthSnapshots.weekStart || user.wealthSnapshots.weekStart.date !== weekStr) {
             user.wealthSnapshots.weekStart = { date: weekStr, wealth: totalWealth };
-            needsSave = true;
+            userUpdated = true;
         }
         if (!user.wealthSnapshots.monthStart || user.wealthSnapshots.monthStart.date !== monthStr) {
             user.wealthSnapshots.monthStart = { date: monthStr, wealth: totalWealth };
-            needsSave = true;
+            userUpdated = true;
         }
         if (!user.wealthSnapshots.yearStart || user.wealthSnapshots.yearStart.date !== yearStr) {
             user.wealthSnapshots.yearStart = { date: yearStr, wealth: totalWealth };
-            needsSave = true;
+            userUpdated = true;
         }
-
-        if (needsSave) {
-            user.markModified('wealthSnapshots');
-            await user.save();
-        }
-        // ---------------------------------------------------------------------------
 
         // Calculate Extended Stats
         const history = user.history || [];
@@ -446,16 +442,10 @@ app.get('/api/user/data', async (req, res) => {
         const stockStats = {};
 
         sellTrades.forEach(trade => {
-            // Kar hesabı: Satış tutarı - (Hisse Adedi * Alış Maliyeti)
-            // (Not: Alış maliyetine zaten komisyon dahil edilmiştir)
-            // Burada basitçe karlı işlem sayısını buluyoruz
-            // trade.total net gelirdir (komisyon düşülmüş satış tutarı)
-            const profit = trade.total - (trade.amount * (trade.price / (1 + COMMISSION_RATE))); // Bu yaklaşık bir maliyet
-            // Daha doğru bakiye bazlı kar hesabı gerekirse modellerde maliyet saklanmalı
-            if (trade.total > (trade.amount * trade.price * (1 - COMMISSION_RATE))) { /* Kar */ }
-
-            // Mevcut mantığa göre winRate tahmini:
-            if (trade.total > 0) totalWin++; // Sadeleştirilmiş
+            // Kar hesabı: Satış tutarı - Maliyet
+            if (trade.total > (trade.amount * trade.price * (1 - COMMISSION_RATE * 2))) {
+                totalWin++;
+            }
             if (!stockStats[trade.symbol]) stockStats[trade.symbol] = 0;
             stockStats[trade.symbol] += trade.total;
         });
@@ -463,14 +453,20 @@ app.get('/api/user/data', async (req, res) => {
         const winRate = sellTrades.length > 0 ? ((totalWin / sellTrades.length) * 100).toFixed(1) : 0;
         const bestStock = Object.keys(stockStats).sort((a, b) => stockStats[b] - stockStats[a])[0] || '-';
 
-        user.stats = {
+        const newStats = {
             winRate,
             bestStock,
             totalTrades: history.length,
             profitableTrades: totalWin
         };
 
-        await user.save();
+        // Sadece değişiklik varsa kaydet
+        if (userUpdated || JSON.stringify(user.stats) !== JSON.stringify(newStats)) {
+            user.stats = newStats;
+            if (userUpdated) user.markModified('wealthSnapshots');
+            await user.save();
+        }
+
         return res.json(user);
     } catch (err) {
         console.error('User Data API Error:', err);

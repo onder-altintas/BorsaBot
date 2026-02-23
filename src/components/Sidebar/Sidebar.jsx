@@ -21,7 +21,7 @@ const SidebarItem = ({ icon: IconComponent, label, active, onClick, variant }) =
   </div>
 );
 
-const Sidebar = ({ activeTab, setActiveTab, onLogout, onReset }) => {
+const Sidebar = ({ activeTab, setActiveTab, onLogout, onReset, isOpen, onClose }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Panel', icon: LayoutDashboard },
     { id: 'market', label: 'Borsa', icon: LineChart },
@@ -41,34 +41,40 @@ const Sidebar = ({ activeTab, setActiveTab, onLogout, onReset }) => {
   };
 
   return (
-    <div className="sidebar">
-      <div className="sidebar-logo">
-        <TrendingUp className="text-success" size={32} />
-        <h1>BIST Sim</h1>
-      </div>
+    <>
+      <div className={`sidebar-overlay ${isOpen ? 'show' : ''}`} onClick={onClose} />
+      <div className={`sidebar ${isOpen ? 'open' : ''}`}>
+        <div className="sidebar-logo">
+          <TrendingUp className="text-success" size={32} />
+          <h1>BIST Sim</h1>
+        </div>
 
-      <div className="sidebar-menu">
-        {menuItems.map(item => (
+        <div className="sidebar-menu">
+          {menuItems.map(item => (
+            <SidebarItem
+              key={item.id}
+              {...item}
+              active={activeTab === item.id}
+              onClick={() => {
+                setActiveTab(item.id);
+                if (window.innerWidth <= 768) onClose();
+              }}
+            />
+          ))}
+        </div>
+
+        <div className="sidebar-footer">
           <SidebarItem
-            key={item.id}
-            {...item}
-            active={activeTab === item.id}
-            onClick={() => setActiveTab(item.id)}
+            icon={RefreshCcw}
+            label="Hesabı Sıfırla"
+            variant="danger"
+            onClick={handleReset}
           />
-        ))}
+          <SidebarItem icon={Settings} label="Ayarlar" onClick={() => setActiveTab('bots')} />
+          <SidebarItem icon={LogOut} label="Çıkış Yap" onClick={onLogout} />
+        </div>
       </div>
-
-      <div className="sidebar-footer">
-        <SidebarItem
-          icon={RefreshCcw}
-          label="Hesabı Sıfırla"
-          variant="danger"
-          onClick={handleReset}
-        />
-        <SidebarItem icon={Settings} label="Ayarlar" onClick={() => setActiveTab('bots')} />
-        <SidebarItem icon={LogOut} label="Çıkış Yap" onClick={onLogout} />
-      </div>
-    </div>
+    </>
   );
 };
 

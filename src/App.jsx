@@ -26,6 +26,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedStock, setSelectedStock] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const {
     balance,
@@ -50,6 +51,11 @@ function App() {
       setCurrentUser(savedUser);
     }
   }, []);
+
+  // Sayfa değişiminde menüyü kapat
+  useEffect(() => {
+    setIsMenuOpen(false);
+  }, [activeTab]);
 
   const handleLogin = (username) => {
     localStorage.setItem('borsabot_user', username);
@@ -99,9 +105,7 @@ function App() {
     }
   };
 
-  if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
-  }
+  if (!isAuthenticated) return <Login onLogin={handleLogin} />;
 
   return (
     <div className="layout">
@@ -110,27 +114,36 @@ function App() {
         setActiveTab={setActiveTab}
         onLogout={handleLogout}
         onReset={resetAccount}
+        isOpen={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
       />
       <main className="main-content">
         <header className="header">
-          <div className="header-search">
-            <input
-              type="text"
-              placeholder="Hisse ara... (örn: THYAO)"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onClick={() => setActiveTab('market')}
-            />
+          <div className="mobile-header-left">
+            <button className="hamburger" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+              <span className={`bar ${isMenuOpen ? 'open' : ''}`}></span>
+              <span className={`bar ${isMenuOpen ? 'open' : ''}`}></span>
+              <span className={`bar ${isMenuOpen ? 'open' : ''}`}></span>
+            </button>
+            <div className="header-search">
+              <input
+                type="text"
+                placeholder="Hisse ara..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onClick={() => setActiveTab('market')}
+              />
+            </div>
           </div>
           <div className="header-profile">
             {!isConnected && (
               <div className="connection-error-badge">
-                Sunucu Bağlantısı Yok
+                Bağlantı Yok
               </div>
             )}
             <div className="budget-badge">
-              <span className="text-secondary text-sm">Toplam Varlık</span>
-              <span className="font-bold">₺{totalWealth.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
+              <span className="text-secondary text-xs">Varlık</span>
+              <span className="font-bold text-sm">₺{totalWealth.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</span>
             </div>
           </div>
         </header>

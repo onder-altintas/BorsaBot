@@ -555,7 +555,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.20',
+    version: '5.0.21',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError
@@ -788,13 +788,12 @@ app.post('/api/bot/config', async (req, res) => {
             user = await User.create(getInitialUserData(username));
         }
 
-        if (user.botConfigs && typeof user.botConfigs.set === 'function') {
-            const existing = user.botConfigs.get(symbol) || {};
-            user.botConfigs.set(symbol, { ...existing, ...config });
-        } else {
-            if (!user.botConfigs) user.botConfigs = {};
-            user.botConfigs[symbol] = { ...(user.botConfigs[symbol] || {}), ...config };
+        if (!user.botConfigs) {
+            user.botConfigs = new Map();
         }
+
+        const existing = user.botConfigs.get(symbol) || {};
+        user.botConfigs.set(symbol, { ...existing, ...config });
 
         user.markModified('botConfigs');
         await user.save();

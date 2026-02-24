@@ -53,15 +53,28 @@ app.use(cors({
 }));
 app.use(express.json());
 
+let activeFetchPromise = null;
+
 // İstek Günlükçü ve Vercel-Bot Tetikleyici Middleware
 app.use(async (req, res, next) => {
     console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url} - Kullanıcı: ${req.headers['x-user'] || 'Misafir'}`);
 
-    // Vercel'de setInterval sürekli çalışmaz, bu yüzden her istekte veri tazeliğini kontrol et
     const now = Date.now();
-    if (now - lastMarketFetchTime > MARKETS_CACHE_TTL) {
-        lastMarketFetchTime = now;
-        fetchRealMarketData().catch(err => console.error('Auto-trigger fetch error:', err));
+    // Veri zaman aşımına uğradıysa veya fiyatlar hala 0 ise (Cold Start)
+    if (now - lastMarketFetchTime > MARKETS_CACHE_TTL || (marketData[0] && marketData[0].price === 0)) {
+        if (!activeFetchPromise) {
+            lastMarketFetchTime = now;
+            activeFetchPromise = fetchRealMarketData().catch(err => {
+                console.error('Auto-trigger fetch error:', err);
+            }).finally(() => {
+                activeFetchPromise = null;
+            });
+        }
+
+        // Bu istek beklemede olan getirme işlemini tamamlamasını beklesin
+        try {
+            await activeFetchPromise;
+        } catch (err) { }
     }
 
     next();
@@ -511,7 +524,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.5',
+    version: '5.0.6',
     timestamp: Date.now(),
     data: marketData
 }));

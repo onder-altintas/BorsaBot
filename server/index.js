@@ -10,10 +10,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 let isAtlasOnline = false;
-let lastMarketUpdate = 0;
-let hourlyDataCache = {};
-let lastHourlyDataFetch = 0;
-const UPDATE_INTERVAL = 20000; // 20 saniye
+let lastMarketFetchTime = 0;
+const MARKETS_CACHE_TTL = 900000; // 15 dakika
 
 // MongoDB Connection with improved error handling
 const connectDB = async () => {
@@ -61,8 +59,8 @@ app.use(async (req, res, next) => {
 
     // Vercel'de setInterval sürekli çalışmaz, bu yüzden her istekte veri tazeliğini kontrol et
     const now = Date.now();
-    if (now - lastMarketUpdate > UPDATE_INTERVAL && isAtlasOnline) {
-        lastMarketUpdate = now;
+    if (now - lastMarketFetchTime > MARKETS_CACHE_TTL && isAtlasOnline) {
+        lastMarketFetchTime = now;
         fetchRealMarketData().catch(err => console.error('Auto-trigger fetch error:', err));
     }
 
@@ -311,34 +309,25 @@ const fetchRealMarketData = async () => {
                 const change = newPrice - prevClose;
                 const changePercent = (change / prevClose) * 100;
 
-                let history;
-                const CACHE_TTL = 900000; // 15 dakika
-                if (now.getTime() - lastHourlyDataFetch > CACHE_TTL || !hourlyDataCache[stock.symbol]) {
-                    const startDate = new Date();
-                    startDate.setDate(startDate.getDate() - 7);
+                // Saatlik veri çekme mantığı (İndikatörler için)
+                const startDate = new Date();
+                startDate.setDate(startDate.getDate() - 7); // Son 1 haftalık veri indikatörler için yeterli
 
-                    const hourlyData = await yahooFinance.historical(stock.symbol, {
-                        period1: startDate,
-                        interval: '1h'
-                    });
+                const hourlyData = await yahooFinance.historical(stock.symbol, {
+                    period1: startDate,
+                    interval: '1h'
+                });
 
-                    history = hourlyData.map(h => ({
-                        time: h.date.toLocaleTimeString(),
-                        price: h.close,
-                        volume: h.volume,
-                        high: h.high,
-                        low: h.low
-                    }));
-                    hourlyDataCache[stock.symbol] = history;
-                } else {
-                    history = [...hourlyDataCache[stock.symbol]];
-                }
+                let history = hourlyData.map(h => ({
+                    time: h.date.toLocaleTimeString(),
+                    price: h.close,
+                    volume: h.volume,
+                    high: h.high,
+                    low: h.low
+                }));
 
-                // Anlık fiyat geçmiş mumlara EKLENMİYOR. 
-                // Böylece indikatörler ve AL/SAT sinyali 20 saniyede bir olan fiyat değişimlerinden 
-                // etkilenmez, sadece kapanmış saatlik mumlara göre sabit kalır.
-
-                // Son 60 saati tut
+                // Anlık fiyat GEÇMİŞ SAATLİK MUMLARA EKLENMİYOR
+                // Sinyaller dalgalanmasın diye sadece kapanmış saatlik mumları tutuyoruz.
                 history = history.slice(-60);
 
                 const indicators = calculateIndicators(history, newPrice, stock.symbol);
@@ -359,9 +348,6 @@ const fetchRealMarketData = async () => {
         }
 
         marketData = updatedMarketData;
-        if (now.getTime() - lastHourlyDataFetch > 900000) {
-            lastHourlyDataFetch = now.getTime();
-        }
 
         // Kullanıcı işlemleri ve botları yönet
         const usersToProcess = await User.find({});
@@ -515,16 +501,14 @@ const fetchRealMarketData = async () => {
     }
 };
 
-// Vercel Serverless ortamında setInterval yerine istek tabanlı tetikleme (yukarıdaki middleware) kullanılır.
-// Ancak yerel çalışmada hala setInterval kullanılabilir.
+// Vercel Serverless ortamında veriler her istekte değil 15 dakikada bir güncellenecek
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-    setInterval(fetchRealMarketData, UPDATE_INTERVAL);
+    setInterval(fetchRealMarketData, 900000); // Local'de de 15 dakikaya çektik dalgalanmayı önlemek için.
 }
 
 // Başlatırken bir kez veri çekmeyi dene
 if (isAtlasOnline) {
     fetchRealMarketData();
-    lastMarketUpdate = Date.now();
 }
 
 // API Endpoints

@@ -41,7 +41,7 @@ const allowedOrigins = [
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
+        if (allowedOrigins.indexOf(origin) === -1 && !origin.endsWith('.vercel.app')) {
             const msg = 'Bu domain için CORS politikası erişime izin vermiyor.';
             return callback(new Error(msg), false);
         }
@@ -513,7 +513,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.2',
+    version: '5.0.3',
     timestamp: Date.now(),
     data: marketData
 }));

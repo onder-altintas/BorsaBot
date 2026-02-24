@@ -555,7 +555,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.21',
+    version: '5.0.22',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError
@@ -788,20 +788,18 @@ app.post('/api/bot/config', async (req, res) => {
             user = await User.create(getInitialUserData(username));
         }
 
-        if (!user.botConfigs) {
-            user.botConfigs = new Map();
+        if (!user.botConfigs || user.botConfigs instanceof Map) {
+            // Backward compatibility
+            user.botConfigs = {};
         }
 
-        const existing = user.botConfigs.get(symbol) || {};
-        user.botConfigs.set(symbol, { ...existing, ...config });
+        const existing = user.botConfigs[symbol] || {};
+        user.botConfigs[symbol] = { ...existing, ...config };
 
         user.markModified('botConfigs');
         await user.save();
 
-        const responseData = user.botConfigs instanceof Map ?
-            Object.fromEntries(user.botConfigs) : user.botConfigs;
-
-        res.json({ success: true, data: responseData });
+        res.json({ success: true, data: user.botConfigs });
     } catch (err) {
         console.error('Bot Ayar Hatası:', err);
         res.status(500).json({ success: false, message: 'Sunucu hatası' });
@@ -809,7 +807,22 @@ app.post('/api/bot/config', async (req, res) => {
 });
 
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-    app.listen(PORT, () => console.log(`Sunucu ${PORT} portunda çalışıyor`));
+    app.listen(PORT, async () => {
+        console.log(`Sunucu ${PORT} portunda çalışıyor`);
+        try {
+            await connectDB();
+            let user = await User.findOne({ username: 'testuser' });
+            if (!user) user = await User.create(getInitialUserData('testuser'));
+            if (!user.botConfigs || user.botConfigs instanceof Map) user.botConfigs = {};
+            const existing = user.botConfigs['BIMAS.IS'] || {};
+            user.botConfigs['BIMAS.IS'] = { ...existing, active: true };
+            user.markModified('botConfigs');
+            await user.save();
+            console.log("BOT CONFIG SAVE TEST PASSED");
+        } catch (e) {
+            console.error("BOT CONFIG SAVE TEST FAILED:", e);
+        }
+    });
 }
 
 module.exports = app;

@@ -32,13 +32,7 @@ const UserSchema = new mongoose.Schema({
         yearStart: { date: String, wealth: Number }
     },
     botConfigs: {
-        type: Map,
-        of: {
-            active: Boolean,
-            amount: Number,
-            stopLoss: Number,
-            takeProfit: Number
-        },
+        type: mongoose.Schema.Types.Mixed,
         default: {}
     },
     stats: {

@@ -524,7 +524,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.7',
+    version: '5.0.8',
     timestamp: Date.now(),
     data: marketData
 }));
@@ -534,7 +534,7 @@ app.get('/api/user/data', async (req, res) => {
     if (!username) return res.status(401).json({ error: 'Yetkilendirme gerekli' });
 
     try {
-        if (!isAtlasOnline) return res.status(503).json({ error: 'Veritabanı bağlantısı yok' });
+
 
         let user = await User.findOne({ username });
         if (!user) {
@@ -631,7 +631,7 @@ app.post('/api/trade/buy', async (req, res) => {
     if (!stock) return res.status(404).json({ success: false, message: 'Hisse bulunamadı.' });
 
     try {
-        if (!isAtlasOnline) return res.status(503).json({ error: 'Veritabanı bağlantısı yok' });
+
         const user = await User.findOne({ username });
         if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
@@ -677,7 +677,7 @@ app.post('/api/trade/sell', async (req, res) => {
 
     const { symbol, amount } = req.body;
     try {
-        if (!isAtlasOnline) return res.status(503).json({ error: 'Veritabanı bağlantısı yok' });
+
         const user = await User.findOne({ username });
         if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
@@ -722,7 +722,7 @@ app.post('/api/user/reset', async (req, res) => {
     if (!username) return res.status(401).json({ error: 'Yetkilendirme gerekli' });
 
     try {
-        if (!isAtlasOnline) return res.status(503).json({ error: 'Veritabanı bağlantısı yok' });
+
         const initialData = getInitialUserData(username);
         let user = await User.findOne({ username });
         if (user) {

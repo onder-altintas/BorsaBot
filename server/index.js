@@ -371,6 +371,7 @@ const fetchRealMarketData = async () => {
                 };
             } catch (err) {
                 console.error(`${stock.symbol} verisi işlenirken hata (detay):`, err.stack);
+                globalFetchError = `[Hata: ${stock.symbol}] ${err.stack || err.message}`;
                 return stock; // Eski 0'lı stock kopyası dönersek API sıfır olarak güncellenir. Ancak mecburen dönüyoruz.
             }
         });
@@ -380,8 +381,10 @@ const fetchRealMarketData = async () => {
         // Sadece başarılı fetch'leri (fiyatı > 0 olanları) tespit edersek global marketData'yı ezelim.
         if (updatedData && updatedData.some(d => d.price > 0)) {
             marketData = updatedData;
+            globalFetchError = null;
         } else {
-            console.error("fetchRealMarketData hata: Bütün hisse çekimleri başarısız oldu veya dizi boş!");
+            if (!globalFetchError) globalFetchError = "FETCH_MARKET_CRASH: Bütün hisse çekimleri başarısız oldu veya dizi boş!";
+            console.error(globalFetchError);
         }
 
         // Kullanıcı işlemleri ve botları yönet
@@ -552,7 +555,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.15',
+    version: '5.0.16',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError

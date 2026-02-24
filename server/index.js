@@ -555,7 +555,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.17',
+    version: '5.0.18',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError
@@ -782,7 +782,6 @@ app.post('/api/bot/config', async (req, res) => {
 
     const { symbol, config } = req.body;
     try {
-        if (!isAtlasOnline) return res.status(503).json({ error: 'Veritabanı bağlantısı yok' });
         const user = await User.findOne({ username });
         if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 

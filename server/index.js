@@ -524,7 +524,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.8',
+    version: '5.0.9',
     timestamp: Date.now(),
     data: marketData
 }));
@@ -618,7 +618,7 @@ app.get('/api/user/data', async (req, res) => {
         return res.json(user);
     } catch (err) {
         console.error('Kullanıcı Verisi API Hatası:', err);
-        res.status(500).json({ error: 'Sunucu hatası' });
+        res.status(500).json({ error: 'Sunucu hatası', details: err.message, stack: err.stack });
     }
 });
 

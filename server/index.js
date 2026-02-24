@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 5000;
 let isAtlasOnline = false;
 let lastMarketFetchTime = 0;
 const MARKETS_CACHE_TTL = 900000; // 15 dakika
+let globalFetchError = null;
 
 // MongoDB Connection with improved error handling for Serverless
 mongoose.set('bufferCommands', false); // Mongoose'un veritabanına bağlanmadan işlemleri askıya almasını (buffering) devre dışı bırak.
@@ -534,6 +535,7 @@ const fetchRealMarketData = async () => {
         }
     } catch (error) {
         console.error('Piyasa Verisi Çekme Hatası:', error);
+        globalFetchError = error.stack || error.message;
     }
 };
 
@@ -549,9 +551,10 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.13',
+    version: '5.0.14',
     timestamp: Date.now(),
-    data: marketData
+    data: marketData,
+    error: globalFetchError
 }));
 
 app.get('/api/user/data', async (req, res) => {

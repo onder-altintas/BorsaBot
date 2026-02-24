@@ -77,6 +77,7 @@ app.use('/api', async (req, res, next) => {
     // Veri zaman aşımına uğradıysa veya fiyatlar hala 0 ise (Cold Start)
     if (now - lastMarketFetchTime > MARKETS_CACHE_TTL || (marketData[0] && marketData[0].price === 0)) {
         if (!activeFetchPromise) {
+            console.log("FETCH REAL MARKET DATA TETIKLENDI (Fiyat 0 veya sure doldu)");
             lastMarketFetchTime = now;
             activeFetchPromise = fetchRealMarketData().catch(err => {
                 console.error('Auto-trigger fetch error:', err);
@@ -314,13 +315,15 @@ const calculateIndicators = (history, currentPrice, symbol) => {
 // Gerçek piyasa verilerini Yahoo Finance üzerinden çekme fonksiyonu
 const fetchRealMarketData = async () => {
     try {
-        if (!isAtlasOnline || mongoose.connection.readyState !== 1) return;
+        if (!isAtlasOnline) return;
 
         const now = new Date();
         const symbols = marketData.map(s => s.symbol);
 
         // Güncel fiyatları çek
+        console.log(`FETCH_MARKET: Yahoo Finance'den ${symbols.length} sembol cekiliyor...`);
         const quotes = await yahooFinance.quote(symbols);
+        console.log(`FETCH_MARKET: ${quotes.length} hisse fiyatı basariyla cekildi.`);
 
         const fetchPromises = marketData.map(async (stock) => {
             try {
@@ -365,12 +368,19 @@ const fetchRealMarketData = async () => {
                     indicators
                 };
             } catch (err) {
-                console.error(`${stock.symbol} verisi işlenirken hata:`, err.message);
-                return stock;
+                console.error(`${stock.symbol} verisi işlenirken hata (detay):`, err.stack);
+                return stock; // Eski 0'lı stock kopyası dönersek API sıfır olarak güncellenir. Ancak mecburen dönüyoruz.
             }
         });
 
-        marketData = await Promise.all(fetchPromises);
+        const updatedData = await Promise.all(fetchPromises);
+
+        // Sadece başarılı fetch'leri (fiyatı > 0 olanları) tespit edersek global marketData'yı ezelim.
+        if (updatedData && updatedData.some(d => d.price > 0)) {
+            marketData = updatedData;
+        } else {
+            console.error("fetchRealMarketData hata: Bütün hisse çekimleri başarısız oldu veya dizi boş!");
+        }
 
         // Kullanıcı işlemleri ve botları yönet
         if (isAtlasOnline) {
@@ -538,7 +548,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.10',
+    version: '5.0.12',
     timestamp: Date.now(),
     data: marketData
 }));

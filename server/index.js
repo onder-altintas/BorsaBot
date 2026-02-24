@@ -3,7 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const mongoose = require('mongoose');
-const yahooFinance = require('yahoo-finance2').default;
+const YahooFinance = require('yahoo-finance2').default;
+const yahooFinance = new YahooFinance();
 const User = require('./models/User');
 
 const app = express();
@@ -548,7 +549,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.12',
+    version: '5.0.13',
     timestamp: Date.now(),
     data: marketData
 }));

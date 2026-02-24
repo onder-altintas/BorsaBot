@@ -25,7 +25,7 @@ const connectDB = async () => {
     } catch (err) {
         isAtlasOnline = false;
         console.error('❌ MongoDB Atlas Bağlantısı Başarısız. Uygulama çalışmak için MongoDB bağlantısına ihtiyaç duyuyor.', err.message);
-        process.exit(1); // Bağlantı olmazsa uygulamayı kapat
+        // Vercel'de process.exit(1) kullanmak 500 Internal Server Error'a neden olur, bu yüzden kaldırdık.
     }
 };
 connectDB();
@@ -59,7 +59,7 @@ app.use(async (req, res, next) => {
 
     // Vercel'de setInterval sürekli çalışmaz, bu yüzden her istekte veri tazeliğini kontrol et
     const now = Date.now();
-    if (now - lastMarketFetchTime > MARKETS_CACHE_TTL && isAtlasOnline) {
+    if (now - lastMarketFetchTime > MARKETS_CACHE_TTL) {
         lastMarketFetchTime = now;
         fetchRealMarketData().catch(err => console.error('Auto-trigger fetch error:', err));
     }
@@ -346,88 +346,56 @@ const fetchRealMarketData = async () => {
         marketData = await Promise.all(fetchPromises);
 
         // Kullanıcı işlemleri ve botları yönet
-        const usersToProcess = await User.find({});
-        for (let user of usersToProcess) {
-            let userChanged = false;
+        if (isAtlasOnline) {
+            const usersToProcess = await User.find({});
+            for (let user of usersToProcess) {
+                let userChanged = false;
 
-            const botConfigs = user.botConfigs;
-            if (botConfigs) {
-                const entries = (botConfigs instanceof Map) ? botConfigs.entries() : Object.entries(botConfigs);
-                for (let [symbol, config] of entries) {
-                    if (config && config.active) {
-                        const stock = marketData.find(s => s.symbol === symbol);
-                        if (!stock) continue;
+                const botConfigs = user.botConfigs;
+                if (botConfigs) {
+                    const entries = (botConfigs instanceof Map) ? botConfigs.entries() : Object.entries(botConfigs);
+                    for (let [symbol, config] of entries) {
+                        if (config && config.active) {
+                            const stock = marketData.find(s => s.symbol === symbol);
+                            if (!stock) continue;
 
-                        const rec = stock.indicators?.recommendation;
+                            const rec = stock.indicators?.recommendation;
 
-                        // AL Sinyali İşleme
-                        if (rec === 'AL') {
-                            const stockCost = stock.price * (config.amount || 1);
-                            const commission = stockCost * COMMISSION_RATE;
-                            const totalCost = stockCost + commission;
+                            // AL Sinyali İşleme
+                            if (rec === 'AL') {
+                                const stockCost = stock.price * (config.amount || 1);
+                                const commission = stockCost * COMMISSION_RATE;
+                                const totalCost = stockCost + commission;
 
-                            if (user.balance >= totalCost) {
-                                user.balance -= totalCost;
-                                const existing = user.portfolio.find(p => p.symbol === stock.symbol);
-                                if (existing) {
-                                    const totalOwned = existing.amount + (config.amount || 1);
-                                    existing.averageCost = (existing.averageCost * existing.amount + totalCost) / totalOwned;
-                                    existing.amount = totalOwned;
-                                } else {
-                                    user.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: (totalCost / (config.amount || 1)) });
+                                if (user.balance >= totalCost) {
+                                    user.balance -= totalCost;
+                                    const existing = user.portfolio.find(p => p.symbol === stock.symbol);
+                                    if (existing) {
+                                        const totalOwned = existing.amount + (config.amount || 1);
+                                        existing.averageCost = (existing.averageCost * existing.amount + totalCost) / totalOwned;
+                                        existing.amount = totalOwned;
+                                    } else {
+                                        user.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: (totalCost / (config.amount || 1)) });
+                                    }
+                                    user.history.unshift({
+                                        id: Date.now() + Math.random(),
+                                        type: 'ALIM',
+                                        symbol: stock.symbol,
+                                        amount: config.amount || 1,
+                                        price: stock.price,
+                                        commission: commission,
+                                        total: totalCost,
+                                        date: new Date().toLocaleString('tr-TR'),
+                                        isAuto: true
+                                    });
+                                    userChanged = true;
                                 }
-                                user.history.unshift({
-                                    id: Date.now() + Math.random(),
-                                    type: 'ALIM',
-                                    symbol: stock.symbol,
-                                    amount: config.amount || 1,
-                                    price: stock.price,
-                                    commission: commission,
-                                    total: totalCost,
-                                    date: new Date().toLocaleString('tr-TR'),
-                                    isAuto: true
-                                });
-                                userChanged = true;
                             }
-                        }
-                        // SAT Sinyali İşleme
-                        else if (rec === 'SAT') {
-                            const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
-                            if (stockInPortfolio && stockInPortfolio.amount > 0) {
-                                const sellAmount = stockInPortfolio.amount; // TÜMÜNÜ SAT
-                                const stockRevenue = stock.price * sellAmount;
-                                const commission = stockRevenue * COMMISSION_RATE;
-                                const netRevenue = stockRevenue - commission;
-
-                                user.balance += netRevenue;
-                                user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
-                                user.markModified('portfolio');
-
-                                user.history.unshift({
-                                    id: Date.now() + Math.random(),
-                                    type: 'SATIM',
-                                    symbol: stock.symbol,
-                                    amount: sellAmount,
-                                    price: stock.price,
-                                    commission: commission,
-                                    total: netRevenue,
-                                    date: new Date().toLocaleString('tr-TR'),
-                                    isAuto: true,
-                                    reason: '4\'lü İndikatör Sinyali'
-                                });
-                                userChanged = true;
-                            }
-                        }
-                        // Stop-Loss ve Take-Profit Kontrolleri (İkincil tetikleyiciler)
-                        else {
-                            const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
-                            if (stockInPortfolio) {
-                                const profitPercent = ((stock.price - stockInPortfolio.averageCost) / stockInPortfolio.averageCost) * 100;
-                                const isSL = config.stopLoss && profitPercent <= -Math.abs(config.stopLoss);
-                                const isTP = config.takeProfit && profitPercent >= Math.abs(config.takeProfit);
-
-                                if (isSL || isTP) {
-                                    const sellAmount = stockInPortfolio.amount;
+                            // SAT Sinyali İşleme
+                            else if (rec === 'SAT') {
+                                const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
+                                if (stockInPortfolio && stockInPortfolio.amount > 0) {
+                                    const sellAmount = stockInPortfolio.amount; // TÜMÜNÜ SAT
                                     const stockRevenue = stock.price * sellAmount;
                                     const commission = stockRevenue * COMMISSION_RATE;
                                     const netRevenue = stockRevenue - commission;
@@ -446,50 +414,84 @@ const fetchRealMarketData = async () => {
                                         total: netRevenue,
                                         date: new Date().toLocaleString('tr-TR'),
                                         isAuto: true,
-                                        reason: isSL ? 'Stop-Loss' : 'Take-Profit'
+                                        reason: '4\'lü İndikatör Sinyali'
                                     });
                                     userChanged = true;
+                                }
+                            }
+                            // Stop-Loss ve Take-Profit Kontrolleri (İkincil tetikleyiciler)
+                            else {
+                                const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
+                                if (stockInPortfolio) {
+                                    const profitPercent = ((stock.price - stockInPortfolio.averageCost) / stockInPortfolio.averageCost) * 100;
+                                    const isSL = config.stopLoss && profitPercent <= -Math.abs(config.stopLoss);
+                                    const isTP = config.takeProfit && profitPercent >= Math.abs(config.takeProfit);
+
+                                    if (isSL || isTP) {
+                                        const sellAmount = stockInPortfolio.amount;
+                                        const stockRevenue = stock.price * sellAmount;
+                                        const commission = stockRevenue * COMMISSION_RATE;
+                                        const netRevenue = stockRevenue - commission;
+
+                                        user.balance += netRevenue;
+                                        user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
+                                        user.markModified('portfolio');
+
+                                        user.history.unshift({
+                                            id: Date.now() + Math.random(),
+                                            type: 'SATIM',
+                                            symbol: stock.symbol,
+                                            amount: sellAmount,
+                                            price: stock.price,
+                                            commission: commission,
+                                            total: netRevenue,
+                                            date: new Date().toLocaleString('tr-TR'),
+                                            isAuto: true,
+                                            reason: isSL ? 'Stop-Loss' : 'Take-Profit'
+                                        });
+                                        userChanged = true;
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            // Varlık Geçmişini Güncelle
-            const currentPortfolioValue = user.portfolio.reduce((acc, item) => {
-                const mStock = marketData.find(s => s.symbol === item.symbol);
-                return acc + (mStock ? mStock.price * item.amount : 0);
-            }, 0);
-            const totalWealth = user.balance + currentPortfolioValue;
-            user.wealthHistory = [...(user.wealthHistory || []), { time: now.toLocaleTimeString(), wealth: totalWealth }].slice(-50);
+                // Varlık Geçmişini Güncelle
+                const currentPortfolioValue = user.portfolio.reduce((acc, item) => {
+                    const mStock = marketData.find(s => s.symbol === item.symbol);
+                    return acc + (mStock ? mStock.price * item.amount : 0);
+                }, 0);
+                const totalWealth = user.balance + currentPortfolioValue;
+                user.wealthHistory = [...(user.wealthHistory || []), { time: now.toLocaleTimeString(), wealth: totalWealth }].slice(-50);
 
-            // Snapshotları Güncelle
-            if (!user.wealthSnapshots) user.wealthSnapshots = {};
-            const weekStart = new Date(now);
-            weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-            const weekStr = weekStart.toLocaleDateString('tr-TR');
-            const monthStr = `${now.getFullYear()}-${now.getMonth() + 1}`;
+                // Snapshotları Güncelle
+                if (!user.wealthSnapshots) user.wealthSnapshots = {};
+                const weekStart = new Date(now);
+                weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+                const weekStr = weekStart.toLocaleDateString('tr-TR');
+                const monthStr = `${now.getFullYear()}-${now.getMonth() + 1}`;
 
-            if (!user.wealthSnapshots.dayStart || user.wealthSnapshots.dayStart.date !== currentDate) {
-                user.wealthSnapshots.dayStart = { date: currentDate, wealth: totalWealth };
-                user.markModified('wealthSnapshots');
-            }
-            if (!user.wealthSnapshots.weekStart || user.wealthSnapshots.weekStart.date !== weekStr) {
-                user.wealthSnapshots.weekStart = { date: weekStr, wealth: totalWealth };
-                user.markModified('wealthSnapshots');
-            }
-            if (!user.wealthSnapshots.monthStart || user.wealthSnapshots.monthStart.date !== monthStr) {
-                user.wealthSnapshots.monthStart = { date: monthStr, wealth: totalWealth };
-                user.markModified('wealthSnapshots');
-            }
-            if (!user.wealthSnapshots.yearStart || user.wealthSnapshots.yearStart.date !== `${now.getFullYear()}`) {
-                user.wealthSnapshots.yearStart = { date: `${now.getFullYear()}`, wealth: totalWealth };
-                user.markModified('wealthSnapshots');
-            }
+                if (!user.wealthSnapshots.dayStart || user.wealthSnapshots.dayStart.date !== currentDate) {
+                    user.wealthSnapshots.dayStart = { date: currentDate, wealth: totalWealth };
+                    user.markModified('wealthSnapshots');
+                }
+                if (!user.wealthSnapshots.weekStart || user.wealthSnapshots.weekStart.date !== weekStr) {
+                    user.wealthSnapshots.weekStart = { date: weekStr, wealth: totalWealth };
+                    user.markModified('wealthSnapshots');
+                }
+                if (!user.wealthSnapshots.monthStart || user.wealthSnapshots.monthStart.date !== monthStr) {
+                    user.wealthSnapshots.monthStart = { date: monthStr, wealth: totalWealth };
+                    user.markModified('wealthSnapshots');
+                }
+                if (!user.wealthSnapshots.yearStart || user.wealthSnapshots.yearStart.date !== `${now.getFullYear()}`) {
+                    user.wealthSnapshots.yearStart = { date: `${now.getFullYear()}`, wealth: totalWealth };
+                    user.markModified('wealthSnapshots');
+                }
 
-            if (userChanged) {
-                await user.save();
+                if (userChanged) {
+                    await user.save();
+                }
             }
         }
     } catch (error) {
@@ -509,7 +511,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.4',
+    version: '5.0.5',
     timestamp: Date.now(),
     data: marketData
 }));

@@ -341,12 +341,12 @@ const fetchRealMarketData = async () => {
                 const startDate = new Date();
                 startDate.setDate(startDate.getDate() - 7); // Son 1 haftalık veri indikatörler için yeterli
 
-                const hourlyData = await yahooFinance.historical(stock.symbol, {
+                const chartData = await yahooFinance.chart(stock.symbol, {
                     period1: startDate,
                     interval: '1h'
                 });
 
-                let history = hourlyData.map(h => ({
+                let history = chartData.quotes.map(h => ({
                     time: h.date.toLocaleTimeString(),
                     price: h.close,
                     volume: h.volume,
@@ -555,7 +555,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.16',
+    version: '5.0.17',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError

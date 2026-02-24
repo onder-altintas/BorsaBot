@@ -13,8 +13,16 @@ let isAtlasOnline = false;
 let lastMarketFetchTime = 0;
 const MARKETS_CACHE_TTL = 900000; // 15 dakika
 
-// MongoDB Connection with improved error handling
+// MongoDB Connection with improved error handling for Serverless
+mongoose.set('bufferCommands', false); // Mongoose'un veritabanına bağlanmadan işlemleri askıya almasını (buffering) devre dışı bırak.
+
 const connectDB = async () => {
+    if (mongoose.connection.readyState >= 1) return mongoose.connection;
+
+    if (!process.env.MONGODB_URI) {
+        throw new Error("MONGODB_URI ortam değişkeni eksik! Lütfen Vercel panelinden ayarlayın.");
+    }
+
     try {
         await mongoose.connect(process.env.MONGODB_URI, {
             serverSelectionTimeoutMS: 5000 // 5 saniye içinde bağlanamazsa hata ver
@@ -22,13 +30,13 @@ const connectDB = async () => {
         isAtlasOnline = true;
         console.log('✅ MongoDB Atlas Bağlantısı Başarılı');
         await migrateSymbols(); // Bağlantıdan sonra sembol migrasyonunu çalıştır
+        return mongoose.connection;
     } catch (err) {
         isAtlasOnline = false;
-        console.error('❌ MongoDB Atlas Bağlantısı Başarısız. Uygulama çalışmak için MongoDB bağlantısına ihtiyaç duyuyor.', err.message);
-        // Vercel'de process.exit(1) kullanmak 500 Internal Server Error'a neden olur, bu yüzden kaldırdık.
+        console.error('❌ MongoDB Atlas Bağlantısı Başarısız:', err.message);
+        throw err;
     }
 };
-connectDB();
 
 // CORS Configuration
 const allowedOrigins = [
@@ -56,8 +64,14 @@ app.use(express.json());
 let activeFetchPromise = null;
 
 // İstek Günlükçü ve Vercel-Bot Tetikleyici Middleware
-app.use(async (req, res, next) => {
+app.use('/api', async (req, res, next) => {
     console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url} - Kullanıcı: ${req.headers['x-user'] || 'Misafir'}`);
+
+    try {
+        await connectDB();
+    } catch (err) {
+        return res.status(503).json({ error: "Veritabanına bağlanılamadı. Vercel ortam değişkenlerini veya MongoDB IP izinlerini kontrol edin.", details: err.message });
+    }
 
     const now = Date.now();
     // Veri zaman aşımına uğradıysa veya fiyatlar hala 0 ise (Cold Start)
@@ -524,7 +538,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.9',
+    version: '5.0.10',
     timestamp: Date.now(),
     data: marketData
 }));

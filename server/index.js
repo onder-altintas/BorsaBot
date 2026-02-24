@@ -294,15 +294,11 @@ const fetchRealMarketData = async () => {
 
         // Güncel fiyatları çek
         const quotes = await yahooFinance.quote(symbols);
-        const updatedMarketData = [];
 
-        for (const stock of marketData) {
+        const fetchPromises = marketData.map(async (stock) => {
             try {
                 const quote = quotes.find(q => q.symbol === stock.symbol);
-                if (!quote) {
-                    updatedMarketData.push(stock);
-                    continue;
-                }
+                if (!quote) return stock;
 
                 const newPrice = quote.regularMarketPrice;
                 const prevClose = quote.regularMarketPreviousClose || newPrice;
@@ -332,7 +328,7 @@ const fetchRealMarketData = async () => {
 
                 const indicators = calculateIndicators(history, newPrice, stock.symbol);
 
-                updatedMarketData.push({
+                return {
                     ...stock,
                     price: newPrice,
                     dayStartPrice: prevClose,
@@ -340,14 +336,14 @@ const fetchRealMarketData = async () => {
                     changePercent: parseFloat(changePercent.toFixed(2)),
                     priceHistory: history,
                     indicators
-                });
+                };
             } catch (err) {
                 console.error(`${stock.symbol} verisi işlenirken hata:`, err.message);
-                updatedMarketData.push(stock);
+                return stock;
             }
-        }
+        });
 
-        marketData = updatedMarketData;
+        marketData = await Promise.all(fetchPromises);
 
         // Kullanıcı işlemleri ve botları yönet
         const usersToProcess = await User.find({});
@@ -513,7 +509,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.3',
+    version: '5.0.4',
     timestamp: Date.now(),
     data: marketData
 }));

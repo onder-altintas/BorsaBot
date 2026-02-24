@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 
 const getApiBaseUrl = () => {
-    if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
-    // Vercel'de çalışıyorsa veya production build ise mevcut host üzerinden /api'ye gider
+    // Vercel veya production ortamlarında KESİNLİKLE kendi /api dizinini kullanmasını zorluyoruz.
+    // Başka bir backend (VITE_API_BASE_URL gibi) ayarlanmış olsa bile, Vercel üzerinde bunu dikkate almayacak.
     if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
         return '/api';
     }
+    if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
     return 'http://localhost:5000/api';
 };
 

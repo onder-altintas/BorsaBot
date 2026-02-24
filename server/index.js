@@ -506,6 +506,7 @@ const fetchRealMarketData = async () => {
 
                 // Snapshotları Güncelle
                 if (!user.wealthSnapshots) user.wealthSnapshots = {};
+                const currentDate = now.toLocaleDateString('tr-TR');
                 const weekStart = new Date(now);
                 weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
                 const weekStr = weekStart.toLocaleDateString('tr-TR');
@@ -551,7 +552,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.14',
+    version: '5.0.15',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError

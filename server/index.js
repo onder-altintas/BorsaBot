@@ -555,7 +555,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.19',
+    version: '5.0.20',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError
@@ -783,8 +783,10 @@ app.post('/api/bot/config', async (req, res) => {
     const { symbol, config } = req.body;
     try {
         await connectDB();
-        const user = await User.findOne({ username });
-        if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
+        let user = await User.findOne({ username });
+        if (!user) {
+            user = await User.create(getInitialUserData(username));
+        }
 
         if (user.botConfigs && typeof user.botConfigs.set === 'function') {
             const existing = user.botConfigs.get(symbol) || {};

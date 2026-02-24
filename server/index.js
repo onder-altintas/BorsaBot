@@ -11,6 +11,8 @@ const PORT = process.env.PORT || 5000;
 
 let isAtlasOnline = false;
 let lastMarketUpdate = 0;
+let hourlyDataCache = {};
+let lastHourlyDataFetch = 0;
 const UPDATE_INTERVAL = 20000; // 20 saniye
 
 // MongoDB Connection with improved error handling
@@ -258,10 +260,7 @@ const calculateIndicators = (history, currentPrice, symbol) => {
         recommendation = 'SAT';
     }
 
-    // GÜVENLİK FİLTRESİ: Eğer bir şekilde 'Güçlü' ifadesi sızarsa temizle
-    if (typeof recommendation === 'string' && recommendation.includes('GÜÇLÜ')) {
-        recommendation = recommendation.replace('GÜÇLÜ ', '');
-    }
+    // GÜVENLİK FİLTRESİ: GÜÇLÜ ifadeleri tamamen kaldırıldı
 
     return {
         sma5: parseFloat(sma5.toFixed(2)),
@@ -312,31 +311,32 @@ const fetchRealMarketData = async () => {
                 const change = newPrice - prevClose;
                 const changePercent = (change / prevClose) * 100;
 
-                // Saatlik veri çekme mantığı (İndikatörler için)
-                const startDate = new Date();
-                startDate.setDate(startDate.getDate() - 7); // Son 1 haftalık veri indikatörler için yeterli
+                let history;
+                const CACHE_TTL = 900000; // 15 dakika
+                if (now.getTime() - lastHourlyDataFetch > CACHE_TTL || !hourlyDataCache[stock.symbol]) {
+                    const startDate = new Date();
+                    startDate.setDate(startDate.getDate() - 7);
 
-                const hourlyData = await yahooFinance.historical(stock.symbol, {
-                    period1: startDate,
-                    interval: '1h'
-                });
+                    const hourlyData = await yahooFinance.historical(stock.symbol, {
+                        period1: startDate,
+                        interval: '1h'
+                    });
 
-                let history = hourlyData.map(h => ({
-                    time: h.date.toLocaleTimeString(),
-                    price: h.close,
-                    volume: h.volume,
-                    high: h.high,
-                    low: h.low
-                }));
+                    history = hourlyData.map(h => ({
+                        time: h.date.toLocaleTimeString(),
+                        price: h.close,
+                        volume: h.volume,
+                        high: h.high,
+                        low: h.low
+                    }));
+                    hourlyDataCache[stock.symbol] = history;
+                } else {
+                    history = [...hourlyDataCache[stock.symbol]];
+                }
 
-                // Anlık fiyatı geçmişe ekle (En son barı güncelle veya yeni bar olarak ekle)
-                history.push({
-                    time: now.toLocaleTimeString(),
-                    price: newPrice,
-                    volume: quote.regularMarketVolume,
-                    high: quote.regularMarketDayHigh,
-                    low: quote.regularMarketDayLow
-                });
+                // Anlık fiyat geçmiş mumlara EKLENMİYOR. 
+                // Böylece indikatörler ve AL/SAT sinyali 20 saniyede bir olan fiyat değişimlerinden 
+                // etkilenmez, sadece kapanmış saatlik mumlara göre sabit kalır.
 
                 // Son 60 saati tut
                 history = history.slice(-60);
@@ -359,6 +359,9 @@ const fetchRealMarketData = async () => {
         }
 
         marketData = updatedMarketData;
+        if (now.getTime() - lastHourlyDataFetch > 900000) {
+            lastHourlyDataFetch = now.getTime();
+        }
 
         // Kullanıcı işlemleri ve botları yönet
         const usersToProcess = await User.find({});

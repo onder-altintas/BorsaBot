@@ -25,19 +25,15 @@ export const useTrading = (currentUser) => {
 
     const fetchData = async () => {
         if (!currentUser) return;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 saniye zaman aşımı
+        // Strict 5s timeout removed to accommodate Vercel cold starts which take 5-8s combined.
 
         try {
             const [marketRes, userRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/market?t=${Date.now()}`, { signal: controller.signal }),
+                fetch(`${API_BASE_URL}/market?t=${Date.now()}`),
                 fetch(`${API_BASE_URL}/user/data?t=${Date.now()}`, {
-                    headers: { 'x-user': currentUser },
-                    signal: controller.signal
+                    headers: { 'x-user': currentUser }
                 })
             ]);
-
-            clearTimeout(timeoutId);
 
             if (marketRes.ok && userRes.ok) {
                 setIsConnected(true);
@@ -68,12 +64,7 @@ export const useTrading = (currentUser) => {
                 setStats(uData.stats ?? { winRate: 0, bestStock: '-', totalTrades: 0 });
             }
         } catch (error) {
-            clearTimeout(timeoutId);
-            if (error.name === 'AbortError') {
-                console.error('İstek zaman aşımına uğradı (Timeout).');
-            } else {
-                console.error('Veri çekme hatası:', error);
-            }
+            console.error('Veri çekme hatası:', error);
             setIsConnected(false);
         }
     };

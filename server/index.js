@@ -524,7 +524,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.6',
+    version: '5.0.7',
     timestamp: Date.now(),
     data: marketData
 }));

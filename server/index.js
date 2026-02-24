@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 5000;
 
 let isAtlasOnline = false;
 let lastMarketFetchTime = 0;
-const MARKETS_CACHE_TTL = 900000; // 15 dakika
+const MARKETS_CACHE_TTL = 20000; // 20 saniye
 let globalFetchError = null;
 
 // MongoDB Connection with improved error handling for Serverless
@@ -543,9 +543,9 @@ const fetchRealMarketData = async () => {
     }
 };
 
-// Vercel Serverless ortamında veriler her istekte değil 15 dakikada bir güncellenecek
+// Vercel Serverless ortamında veriler her istekte değil 20 saniyede bir güncellenecek
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-    setInterval(fetchRealMarketData, 900000); // Local'de de 15 dakikaya çektik dalgalanmayı önlemek için.
+    setInterval(fetchRealMarketData, 20000); // Local'de 20 saniyeye çektik.
 }
 
 // Başlatırken bir kez veri çekmeyi dene
@@ -555,7 +555,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.18',
+    version: '5.0.19',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError
@@ -782,6 +782,7 @@ app.post('/api/bot/config', async (req, res) => {
 
     const { symbol, config } = req.body;
     try {
+        await connectDB();
         const user = await User.findOne({ username });
         if (!user) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 

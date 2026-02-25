@@ -405,11 +405,15 @@ const fetchRealMarketData = async () => {
 
                             const rec = stock.indicators?.recommendation;
 
+                            console.log(`[BOT EVAL] User: ${user.username} | Symbol: ${symbol} | Active: ${config.active} | Signal: ${rec} | LastSignal: ${config.lastSignal} | Balance: ${user.balance}`);
+
                             // AL Sinyali İşleme (Sadece yeni sinyalse)
                             if (rec === 'AL' && config.lastSignal !== 'AL') {
                                 const stockCost = stock.price * (config.amount || 1);
                                 const commission = stockCost * COMMISSION_RATE;
                                 const totalCost = stockCost + commission;
+
+                                console.log(`[BOT ATTEMPT BUY] Try buy ${symbol} for total cost ${totalCost}. Has balance: ${user.balance >= totalCost}`);
 
                                 if (user.balance >= totalCost) {
                                     user.balance -= totalCost;
@@ -430,10 +434,27 @@ const fetchRealMarketData = async () => {
                                         commission: commission,
                                         total: totalCost,
                                         date: new Date().toLocaleString('tr-TR'),
-                                        isAuto: true
+                                        isAuto: true,
+                                        reason: '4\'lü İndikatör Sinyali'
                                     });
 
                                     config.lastSignal = 'AL'; // Son işlemi kaydet
+                                    userChanged = true;
+                                } else {
+                                    // Yetersiz bakiye loglaması (Sadece bir kere uyarmak için lastSignal'i AL yapıyoruz)
+                                    user.history.unshift({
+                                        id: Date.now() + Math.random(),
+                                        type: 'SİSTEM',
+                                        symbol: stock.symbol,
+                                        amount: 0,
+                                        price: stock.price,
+                                        commission: 0,
+                                        total: totalCost,
+                                        date: new Date().toLocaleString('tr-TR'),
+                                        isAuto: true,
+                                        reason: `Yetersiz Bakiye! ${config.amount || 1} adet için ${totalCost.toFixed(2)} TL gerekli.`
+                                    });
+                                    config.lastSignal = 'AL'; // Uyarıyı verdik, tekrar spam yapmasın
                                     userChanged = true;
                                 }
                             }
@@ -513,6 +534,8 @@ const fetchRealMarketData = async () => {
 
                     if (userChanged) {
                         user.markModified('botConfigs'); // Map ve obje değişiklikleri için kritik
+                        user.markModified('portfolio');  // Güvenlik amaçlı her seferinde portföyü modifiye işaretle
+                        user.markModified('history');    // Güvenlik amaçlı her seferinde history'yi modifiye işaretle
                     }
                 }
 
@@ -572,7 +595,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.25',
+    version: '5.0.26',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError

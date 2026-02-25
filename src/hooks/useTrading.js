@@ -22,6 +22,7 @@ export const useTrading = (currentUser) => {
     const [botConfigs, setBotConfigs] = useState({});
     const [stats, setStats] = useState({ winRate: 0, bestStock: '-', totalTrades: 0 });
     const [isConnected, setIsConnected] = useState(true);
+    const [nextFetchIn, setNextFetchIn] = useState(20);
 
     const fetchData = async () => {
         if (!currentUser) return;
@@ -66,13 +67,23 @@ export const useTrading = (currentUser) => {
         } catch (error) {
             console.error('Veri çekme hatası:', error);
             setIsConnected(false);
+        } finally {
+            setNextFetchIn(20); // Geri sayımı sıfırla
         }
     };
 
     useEffect(() => {
         fetchData();
         const interval = setInterval(fetchData, 20000);
-        return () => clearInterval(interval);
+
+        const countdownInterval = setInterval(() => {
+            setNextFetchIn(prev => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+
+        return () => {
+            clearInterval(interval);
+            clearInterval(countdownInterval);
+        };
     }, [currentUser]);
 
     const buyStock = async (symbol, amount) => {
@@ -167,6 +178,7 @@ export const useTrading = (currentUser) => {
         botConfigs,
         stats,
         isConnected,
+        nextFetchIn,
         buyStock,
         sellStock,
         updateBotConfig,

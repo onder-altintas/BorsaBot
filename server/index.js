@@ -572,7 +572,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.23',
+    version: '5.0.24',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError

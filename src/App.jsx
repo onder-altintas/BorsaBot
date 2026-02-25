@@ -41,7 +41,8 @@ function App() {
     sellStock,
     updateBotConfig,
     resetAccount,
-    isConnected
+    isConnected,
+    nextFetchIn
   } = useTrading(currentUser);
 
   useEffect(() => {
@@ -135,7 +136,10 @@ function App() {
               />
             </div>
           </div>
-          <div className="header-profile">
+          <div className="header-profile" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div className="countdown-badge" style={{ background: 'var(--accent-subtle)', color: 'var(--accent)', padding: '4px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+              ⏳ Süre: {nextFetchIn} sn
+            </div>
             {!isConnected && (
               <div className="connection-error-badge">
                 Bağlantı Yok

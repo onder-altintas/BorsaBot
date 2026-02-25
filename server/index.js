@@ -19,7 +19,10 @@ let globalFetchError = null;
 mongoose.set('bufferCommands', false); // Mongoose'un veritabanına bağlanmadan işlemleri askıya almasını (buffering) devre dışı bırak.
 
 const connectDB = async () => {
-    if (mongoose.connection.readyState >= 1) return mongoose.connection;
+    if (mongoose.connection.readyState >= 1) {
+        isAtlasOnline = true;
+        return mongoose.connection;
+    }
 
     if (!process.env.MONGODB_URI) {
         throw new Error("MONGODB_URI ortam değişkeni eksik! Lütfen Vercel panelinden ayarlayın.");
@@ -573,10 +576,18 @@ const fetchRealMarketData = async () => {
                 }
 
                 if (userChanged) {
-                    await user.save();
+                    try {
+                        await user.save();
+                        console.log(`[BOT DB UPDATE] Kullanici ${user.username} portfoyu/tarihcesi guncellendi.`);
+                    } catch (e) {
+                        console.error(`[CRITICAL BOT DB ERROR] Kullanici ${user.username} portfoyu KAYDEDILEMEDI:`, e.name, e.message);
+                        if (e.name === 'VersionError') {
+                            console.error('[VersionError] Ayni anda hem arayuzden islem yapildi hem bot tetiklendi. Kayit çakıştı!');
+                        }
+                    }
                 }
-            }
-        }
+            } // end processes
+        } // end atlas block
     } catch (error) {
         console.error('Piyasa Verisi Çekme Hatası:', error);
         globalFetchError = error.stack || error.message;
@@ -595,7 +606,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.26',
+    version: '5.0.27',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError

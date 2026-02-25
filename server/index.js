@@ -346,13 +346,15 @@ const fetchRealMarketData = async () => {
                     interval: '1h'
                 });
 
-                let history = chartData.quotes.map(h => ({
-                    time: h.date.toLocaleTimeString(),
-                    price: h.close,
-                    volume: h.volume,
-                    high: h.high,
-                    low: h.low
-                }));
+                let history = chartData.quotes
+                    .filter(h => h.close !== null && h.close !== undefined)
+                    .map(h => ({
+                        time: h.date.toLocaleTimeString(),
+                        price: h.close,
+                        volume: h.volume || 0,
+                        high: h.high || h.close,
+                        low: h.low || h.close
+                    }));
 
                 // Anlık fiyat GEÇMİŞ SAATLİK MUMLARA EKLENMİYOR
                 // Sinyaller dalgalanmasın diye sadece kapanmış saatlik mumları tutuyoruz.
@@ -570,7 +572,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.22',
+    version: '5.0.23',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError

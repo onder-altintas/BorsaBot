@@ -75,9 +75,9 @@ const Sidebar = ({ activeTab, setActiveTab, onLogout, onReset, isOpen, onClose }
         </div>
 
         <div className="sidebar-version">
-          <span>UI v5.0.24</span>
+          <span>UI v5.0.25</span>
           <span style={{ fontSize: '10px', opacity: '0.6', display: 'block' }}>
-            API: {window.backendVersion || 'v5.0.24...'}
+            API: {window.backendVersion || 'v5.0.25...'}
           </span>
         </div>
       </div>

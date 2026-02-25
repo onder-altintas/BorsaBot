@@ -572,7 +572,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.24',
+    version: '5.0.25',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError
@@ -780,6 +780,7 @@ app.post('/api/user/reset', async (req, res) => {
             user.history = initialData.history;
             user.wealthHistory = initialData.wealthHistory;
             user.stats = initialData.stats;
+            user.botConfigs = initialData.botConfigs;
             // Snapshot'ları standart başlangıç değerlerine (100.000 TL) geri döndür
             user.wealthSnapshots = initialData.wealthSnapshots;
             user.markModified('wealthSnapshots');
@@ -811,6 +812,12 @@ app.post('/api/bot/config', async (req, res) => {
         }
 
         const existing = user.botConfigs[symbol] || {};
+
+        // Bot kapalıyken açıldıysa, eski sinyali unut ki sıradaki ilk AL/SAT sinyalini yakalayabilsin
+        if (config.active === true && existing.active !== true) {
+            existing.lastSignal = null;
+        }
+
         user.botConfigs[symbol] = { ...existing, ...config };
 
         user.markModified('botConfigs');

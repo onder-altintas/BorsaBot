@@ -403,8 +403,8 @@ const fetchRealMarketData = async () => {
 
                             const rec = stock.indicators?.recommendation;
 
-                            // AL Sinyali İşleme
-                            if (rec === 'AL') {
+                            // AL Sinyali İşleme (Sadece yeni sinyalse)
+                            if (rec === 'AL' && config.lastSignal !== 'AL') {
                                 const stockCost = stock.price * (config.amount || 1);
                                 const commission = stockCost * COMMISSION_RATE;
                                 const totalCost = stockCost + commission;
@@ -430,11 +430,13 @@ const fetchRealMarketData = async () => {
                                         date: new Date().toLocaleString('tr-TR'),
                                         isAuto: true
                                     });
+
+                                    config.lastSignal = 'AL'; // Son işlemi kaydet
                                     userChanged = true;
                                 }
                             }
-                            // SAT Sinyali İşleme
-                            else if (rec === 'SAT') {
+                            // SAT Sinyali İşleme (Sadece yeni sinyalse)
+                            else if (rec === 'SAT' && config.lastSignal !== 'SAT') {
                                 const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
                                 if (stockInPortfolio && stockInPortfolio.amount > 0) {
                                     const sellAmount = stockInPortfolio.amount; // TÜMÜNÜ SAT
@@ -458,11 +460,19 @@ const fetchRealMarketData = async () => {
                                         isAuto: true,
                                         reason: '4\'lü İndikatör Sinyali'
                                     });
+
+                                    config.lastSignal = 'SAT'; // Son işlemi kaydet
                                     userChanged = true;
                                 }
                             }
                             // Stop-Loss ve Take-Profit Kontrolleri (İkincil tetikleyiciler)
                             else {
+                                // Sinyalin güncel durumunu unutmamak için (örn. sadece TUT ise son sinyali TUT olarak bırakalım da AL gelirse alsın)
+                                if (rec === 'TUT' && config.lastSignal !== 'TUT') {
+                                    config.lastSignal = 'TUT';
+                                    userChanged = true;
+                                }
+
                                 const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
                                 if (stockInPortfolio) {
                                     const profitPercent = ((stock.price - stockInPortfolio.averageCost) / stockInPortfolio.averageCost) * 100;
@@ -491,11 +501,16 @@ const fetchRealMarketData = async () => {
                                             isAuto: true,
                                             reason: isSL ? 'Stop-Loss' : 'Take-Profit'
                                         });
+                                        config.lastSignal = 'TUT'; // Sattıktan sonra yeniden 'AL' fırsatı yakalayabilmesi için nötre çek
                                         userChanged = true;
                                     }
                                 }
                             }
                         }
+                    }
+
+                    if (userChanged) {
+                        user.markModified('botConfigs'); // Map ve obje değişiklikleri için kritik
                     }
                 }
 

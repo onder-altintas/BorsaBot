@@ -14,6 +14,7 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                     <span>Hisse</span>
                     <span>Anlık Fiyat</span>
                     <span>Öneri</span>
+                    <span>Strateji</span>
                     <span>Bot Durumu</span>
                     <span>Adet</span>
                     <span>Stop-Loss</span>
@@ -43,6 +44,18 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                                 <span className={`recommendation-badge ${recClass}`}>
                                     {recommendation}
                                 </span>
+                            </div>
+                            <div className="stock-bot-strategy">
+                                <select
+                                    className="bot-amount-input"
+                                    style={{ width: '90px', padding: '0.2rem' }}
+                                    value={botConfig.strategy || 'QQE'}
+                                    onChange={(e) => onUpdateBot(stock.symbol, { strategy: e.target.value })}
+                                    disabled={!botConfig.active}
+                                >
+                                    <option value="QQE">QQE</option>
+                                    <option value="4COMBO">4-Combo</option>
+                                </select>
                             </div>
                             <div className="stock-bot-status">
                                 <div className="bot-toggle">

@@ -291,6 +291,111 @@ const calculateIndicators = (history, currentPrice, symbol) => {
 
     // GÜVENLİK FİLTRESİ: GÜÇLÜ ifadeleri tamamen kaldırıldı
 
+    // --- QQE İNDİKATÖRÜ EKLENTİSİ ---
+    const rsiLength = 15;
+    const ssf = 14;
+
+    const calculateWildersRSI = (data, period) => {
+        let rsiArr = [];
+        if (data.length < period) return data.map(() => 50);
+
+        let gains = 0, losses = 0;
+        for (let i = 1; i <= period; i++) {
+            const diff = data[i] - data[i - 1];
+            if (diff > 0) gains += diff;
+            else losses -= diff;
+        }
+        let avgGain = gains / period;
+        let avgLoss = losses / period;
+
+        rsiArr[period] = avgLoss === 0 ? 100 : 100 - (100 / (1 + (avgGain / avgLoss)));
+
+        for (let i = period + 1; i < data.length; i++) {
+            const diff = data[i] - data[i - 1];
+            const gain = diff > 0 ? diff : 0;
+            const loss = diff < 0 ? -diff : 0;
+
+            avgGain = (avgGain * (period - 1) + gain) / period;
+            avgLoss = (avgLoss * (period - 1) + loss) / period;
+
+            let rs = avgGain / avgLoss;
+            rsiArr[i] = avgLoss === 0 ? 100 : 100 - (100 / (1 + rs));
+        }
+
+        for (let i = 0; i <= period; i++) {
+            if (rsiArr[i] === undefined) rsiArr[i] = rsiArr[period] || 50;
+        }
+        return rsiArr;
+    };
+
+    const calculateEMAArray = (data, period) => {
+        let emaArr = [];
+        let alpha = 2 / (period + 1);
+        emaArr[0] = data[0];
+        for (let i = 1; i < data.length; i++) {
+            const val = data[i] !== undefined ? data[i] : emaArr[i - 1];
+            emaArr[i] = alpha * val + (1 - alpha) * emaArr[i - 1];
+        }
+        return emaArr;
+    };
+
+    let rsiRaw = calculateWildersRSI(prices, rsiLength);
+    let RSII = calculateEMAArray(rsiRaw, ssf);
+    let QQEF = RSII;
+
+    let TR = [0];
+    for (let i = 1; i < RSII.length; i++) {
+        TR.push(Math.abs(RSII[i] - RSII[i - 1]));
+    }
+
+    let wwalpha = 1 / rsiLength;
+    let WWMA = [0];
+    for (let i = 1; i < TR.length; i++) {
+        let prevWWMA = WWMA[i - 1] || 0;
+        WWMA.push(wwalpha * TR[i] + (1 - wwalpha) * prevWWMA);
+    }
+
+    let ATRRSI = [0];
+    for (let i = 1; i < WWMA.length; i++) {
+        let prevATRRSI = ATRRSI[i - 1] || 0;
+        ATRRSI.push(wwalpha * WWMA[i] + (1 - wwalpha) * prevATRRSI);
+    }
+
+    let QUP = [];
+    let QDN = [];
+    let QQES = [];
+
+    for (let i = 0; i < QQEF.length; i++) {
+        QUP.push(QQEF[i] + ATRRSI[i] * 4.236);
+        QDN.push(QQEF[i] - ATRRSI[i] * 4.236);
+
+        if (i === 0) {
+            QQES.push(0);
+            continue;
+        }
+
+        let prevQQES = QQES[i - 1] || 0;
+        let prevQQEF = QQEF[i - 1] || 0;
+
+        let currentQQES = prevQQES;
+
+        if (QUP[i] < prevQQES) currentQQES = QUP[i];
+        else if (QQEF[i] > prevQQES && prevQQEF < prevQQES) currentQQES = QDN[i];
+        else if (QDN[i] > prevQQES) currentQQES = QDN[i];
+        else if (QQEF[i] < prevQQES && prevQQEF > prevQQES) currentQQES = QUP[i];
+
+        QQES.push(currentQQES);
+    }
+
+    let currentQQEF = QQEF[QQEF.length - 1];
+    let prevQQEF_val = QQEF[QQEF.length - 2];
+    let currentQQES = QQES[QQES.length - 1];
+    let prevQQES_val = QQES[QQES.length - 2];
+
+    let recommendationQQE = 'TUT';
+    if (currentQQEF > currentQQES && prevQQEF_val <= prevQQES_val) recommendationQQE = 'AL';
+    else if (currentQQEF < currentQQES && prevQQEF_val >= prevQQES_val) recommendationQQE = 'SAT';
+
     return {
         sma5: parseFloat(sma5.toFixed(2)),
         sma10: parseFloat(sma10.toFixed(2)),
@@ -311,7 +416,8 @@ const calculateIndicators = (history, currentPrice, symbol) => {
             val2: parseFloat(fish2.toFixed(3))
         },
         fisherRaw: currentFValue,
-        recommendation
+        recommendation,
+        recommendationQQE
     };
 };
 
@@ -404,9 +510,15 @@ const fetchRealMarketData = async () => {
                             const stock = marketData.find(s => s.symbol === symbol);
                             if (!stock) continue;
 
-                            const rec = stock.indicators?.recommendation;
+                            const strategyType = config.strategy || 'QQE';
+                            let rec = 'TUT';
+                            if (strategyType === 'QQE') {
+                                rec = stock.indicators?.recommendationQQE || 'TUT';
+                            } else {
+                                rec = stock.indicators?.recommendation || 'TUT';
+                            }
 
-                            console.log(`[BOT EVAL] User: ${user.username} | Symbol: ${symbol} | Active: ${config.active} | Signal: ${rec} | LastSignal: ${config.lastSignal} | Balance: ${user.balance}`);
+                            console.log(`[BOT EVAL] User: ${user.username} | Symbol: ${symbol} | Active: ${config.active} | Strat: ${strategyType} | Signal: ${rec} | LastSignal: ${config.lastSignal} | Balance: ${user.balance}`);
 
                             // AL Sinyali İşleme (Sadece yeni sinyalse)
                             if (rec === 'AL' && config.lastSignal !== 'AL') {

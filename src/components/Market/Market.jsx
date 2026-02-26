@@ -18,19 +18,13 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                     <span>RSI</span>
                     <span>BB (Üst/Alt)</span>
                     <span>Fisher</span>
-                    <span>Öneri</span>
                     <span>İşlem</span>
                 </div>
 
                 {stocks.map(stock => {
                     const rsiValue = stock.indicators?.rsi || 50;
                     const rsiColor = rsiValue > 70 ? 'text-error' : rsiValue < 30 ? 'text-success' : 'text-secondary';
-                    const recommendation = stock.indicators?.recommendation || 'TUT';
                     const botConfig = botConfigs[stock.symbol] || { active: false, amount: 1 };
-
-                    let recClass = 'badge-hold';
-                    if (recommendation === 'AL') recClass = 'badge-buy';
-                    else if (recommendation === 'SAT') recClass = 'badge-sell';
 
                     return (
                         <div key={stock.symbol} className={`stock-row ${botConfig.active ? 'bot-active-row' : ''}`}>
@@ -62,11 +56,6 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                             <div className={`stock-fisher desktop-only font-bold text-xs ${(stock.indicators?.fisher?.val1 || 0) >= (stock.indicators?.fisher?.val2 || 0) ? 'text-success' : 'text-error'}`}>
                                 {stock.indicators?.fisher?.val1?.toFixed(2) || '0.00'}/
                                 {stock.indicators?.fisher?.val2?.toFixed(2) || '0.00'}
-                            </div>
-                            <div className="stock-recommendation desktop-only">
-                                <span className={`recommendation-badge ${recClass}`}>
-                                    {recommendation}
-                                </span>
                             </div>
                             <div className="stock-actions desktop-only">
                                 <button
@@ -108,9 +97,6 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                                     </div>
                                 </div>
                                 <div className="card-footer">
-                                    <span className={`recommendation-badge ${recClass}`}>
-                                        {recommendation}
-                                    </span>
                                     <button
                                         className="btn-buy"
                                         onClick={() => onTrade(stock)}

@@ -25,7 +25,10 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                     const botConfig = (botConfigs && typeof botConfigs.get === 'function'
                         ? botConfigs.get(stock.symbol)
                         : botConfigs?.[stock.symbol]) || { active: false, amount: 1 };
-                    const recommendation = stock.indicators?.recommendation || 'TUT';
+                    const strategyType = botConfig.strategy || 'QQE';
+                    const recommendation = strategyType === 'QQE'
+                        ? (stock.indicators?.recommendationQQE || 'TUT')
+                        : (stock.indicators?.recommendation || 'TUT');
 
                     let recClass = 'badge-hold';
                     if (recommendation === 'AL') recClass = 'badge-buy';

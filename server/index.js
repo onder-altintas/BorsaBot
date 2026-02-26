@@ -250,44 +250,42 @@ const calculateIndicators = (history, currentPrice, symbol) => {
     const fish2 = prevFish1;
 
     // --- 4'LÜ KOMBO ÖZEL: HACİM MOMENTUM ---
-    const volSMA25 = volumes.slice(-25).reduce((a, b) => a + b, 0) / Math.min(volumes.length, 25);
-    const currentVol = volumes[volumes.length - 1] || 0;
-    const isVolBullish = currentVol > volSMA25;
+    const vEmaLen = 25;
+    let nRes1_array = [0];
+    let nRes2_array = [0];
 
-    // --- 4'LÜ KONSENSÜS SİNYAL MANTİĞI (SAATLİK VERİ BAZLI) ---
-    // Bu mantık Fisher, EMA7, RSI ve Bollinger Bantlarının ortak kararına bakar.
+    for (let i = 1; i < prices.length; i++) {
+        let xROC = ((prices[i] - prices[i - 1]) / prices[i - 1]) * 100;
+        let prevRes1 = nRes1_array[i - 1];
+        let prevRes2 = nRes2_array[i - 1];
 
-    let buyScore = 0;
-    let sellScore = 0;
+        let curRes1 = (volumes[i] < volumes[i - 1]) ? (prevRes1 + xROC) : prevRes1;
+        let curRes2 = (volumes[i] > volumes[i - 1]) ? (prevRes2 + xROC) : prevRes2;
 
-    // 1. Fisher Transform (Hızlı Kesişim ve Trend)
-    if (fish1 > fish2) buyScore++;
-    else if (fish1 < fish2) sellScore++;
+        nRes1_array.push(curRes1);
+        nRes2_array.push(curRes2);
+    }
 
-    // 2. EMA 7 (Trend Altı/Üstü)
-    if (currentPrice > ema7) buyScore++;
-    else if (currentPrice < ema7) sellScore++;
+    const sma = (arr, len) => {
+        if (arr.length === 0) return 0;
+        const period = Math.min(arr.length, len);
+        const slice = arr.slice(-period);
+        return slice.reduce((a, b) => a + b, 0) / period;
+    };
 
-    // 3. RSI 14 (Aşırı Alım/Satım ve Orta Hat)
-    if (rsi > 50) buyScore++;
-    else if (rsi < 50) sellScore++;
-    // Ekstra ağırlık: Aşırı bölgeler
-    if (rsi < 35) buyScore++;
-    if (rsi > 65) sellScore++;
+    let nRes3 = nRes1_array[nRes1_array.length - 1] + nRes2_array[nRes2_array.length - 1];
+    let nResEMA3 = sma(nRes1_array, vEmaLen) + sma(nRes2_array, vEmaLen);
+    const isVolBullish = nRes3 > nResEMA3;
 
-    // 4. Bollinger Bantları (Konum)
-    if (currentPrice < bbMiddle) buyScore++; // Orta bandın altında (Alım fırsatı)
-    if (currentPrice > bbMiddle) sellScore++; // Orta bandın üstünde (Satış fırsatı)
-    // Ekstra ağırlık: Bant dışına taşmalar
-    if (currentPrice <= bbLower) buyScore++;
-    if (currentPrice >= bbUpper) sellScore++;
-
+    // --- SİNYAL MANTIĞI (Fisher + Volume Momentum) ---
     let recommendation = 'TUT';
 
-    // Konsensüs Kararı: Skor 3 ve üzeri ise sinyal üret
-    if (buyScore >= 3 && buyScore > sellScore) {
+    // KESİN AL KURALI: Fisher Yönü Yukarı (fish1 > fish2) VE Hacim Momentum Yeşil (isVolBullish)
+    if (fish1 > fish2 && isVolBullish) {
         recommendation = 'AL';
-    } else if (sellScore >= 3 && sellScore > buyScore) {
+    }
+    // KESİN SAT KURALI: Fisher Yönü Aşağı (fish1 < fish2)
+    else if (fish1 < fish2) {
         recommendation = 'SAT';
     }
 

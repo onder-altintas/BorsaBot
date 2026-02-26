@@ -426,9 +426,9 @@ const fetchRealMarketData = async () => {
                                         existing.averageCost = (existing.averageCost * existing.amount + totalCost) / totalOwned;
                                         existing.amount = totalOwned;
                                     } else {
-                                        user.portfolio.push({ symbol: stock.symbol, amount: (config.amount || 1), averageCost: (totalCost / (config.amount || 1)) });
+                                        user.portfolio = [...user.portfolio, { symbol: stock.symbol, amount: (config.amount || 1), averageCost: (totalCost / (config.amount || 1)) }];
                                     }
-                                    user.history.unshift({
+                                    user.history = [{
                                         id: Date.now() + Math.random(),
                                         type: 'ALIM',
                                         symbol: stock.symbol,
@@ -439,13 +439,13 @@ const fetchRealMarketData = async () => {
                                         date: new Date().toLocaleString('tr-TR'),
                                         isAuto: true,
                                         reason: '4\'lü İndikatör Sinyali'
-                                    });
+                                    }, ...user.history];
 
                                     config.lastSignal = 'AL'; // Son işlemi kaydet
                                     userChanged = true;
                                 } else {
                                     // Yetersiz bakiye loglaması (Sadece bir kere uyarmak için lastSignal'i AL yapıyoruz)
-                                    user.history.unshift({
+                                    user.history = [{
                                         id: Date.now() + Math.random(),
                                         type: 'SİSTEM',
                                         symbol: stock.symbol,
@@ -456,7 +456,7 @@ const fetchRealMarketData = async () => {
                                         date: new Date().toLocaleString('tr-TR'),
                                         isAuto: true,
                                         reason: `Yetersiz Bakiye! ${config.amount || 1} adet için ${totalCost.toFixed(2)} TL gerekli.`
-                                    });
+                                    }, ...user.history];
                                     config.lastSignal = 'AL'; // Uyarıyı verdik, tekrar spam yapmasın
                                     userChanged = true;
                                 }
@@ -474,7 +474,7 @@ const fetchRealMarketData = async () => {
                                     user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
                                     user.markModified('portfolio');
 
-                                    user.history.unshift({
+                                    user.history = [{
                                         id: Date.now() + Math.random(),
                                         type: 'SATIM',
                                         symbol: stock.symbol,
@@ -485,7 +485,7 @@ const fetchRealMarketData = async () => {
                                         date: new Date().toLocaleString('tr-TR'),
                                         isAuto: true,
                                         reason: '4\'lü İndikatör Sinyali'
-                                    });
+                                    }, ...user.history];
 
                                     config.lastSignal = 'SAT'; // Son işlemi kaydet
                                     userChanged = true;
@@ -515,7 +515,7 @@ const fetchRealMarketData = async () => {
                                         user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
                                         user.markModified('portfolio');
 
-                                        user.history.unshift({
+                                        user.history = [{
                                             id: Date.now() + Math.random(),
                                             type: 'SATIM',
                                             symbol: stock.symbol,
@@ -526,7 +526,7 @@ const fetchRealMarketData = async () => {
                                             date: new Date().toLocaleString('tr-TR'),
                                             isAuto: true,
                                             reason: isSL ? 'Stop-Loss' : 'Take-Profit'
-                                        });
+                                        }, ...user.history];
                                         config.lastSignal = 'TUT'; // Sattıktan sonra yeniden 'AL' fırsatı yakalayabilmesi için nötre çek
                                         userChanged = true;
                                     }
@@ -731,10 +731,10 @@ app.post('/api/trade/buy', async (req, res) => {
             existing.averageCost = (existing.averageCost * existing.amount + totalCost) / totalOwned;
             existing.amount = totalOwned;
         } else {
-            user.portfolio.push({ symbol, amount, averageCost: (totalCost / amount) });
+            user.portfolio = [...user.portfolio, { symbol, amount, averageCost: (totalCost / amount) }];
         }
 
-        user.history.unshift({
+        user.history = [{
             id: Date.now(),
             type: 'ALIM',
             symbol,
@@ -744,7 +744,7 @@ app.post('/api/trade/buy', async (req, res) => {
             total: totalCost,
             date: new Date().toLocaleString('tr-TR'),
             isAuto: false
-        });
+        }, ...user.history];
 
         await user.save();
         res.json({ success: true, data: user });
@@ -780,7 +780,7 @@ app.post('/api/trade/sell', async (req, res) => {
             user.portfolio = user.portfolio.filter(p => p.symbol !== symbol);
         }
 
-        user.history.unshift({
+        user.history = [{
             id: Date.now(),
             type: 'SATIM',
             symbol,
@@ -790,7 +790,7 @@ app.post('/api/trade/sell', async (req, res) => {
             total: netRevenue,
             date: new Date().toLocaleString('tr-TR'),
             isAuto: false
-        });
+        }, ...user.history];
 
         await user.save();
         res.json({ success: true, data: user });

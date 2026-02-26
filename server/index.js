@@ -70,7 +70,7 @@ let activeFetchPromise = null;
 
 // İstek Günlükçü ve Vercel-Bot Tetikleyici Middleware
 app.use('/api', async (req, res, next) => {
-    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url} - Kullanıcı: ${req.headers['x-user'] || 'Misafir'}`);
+    console.log(`[${new Date().toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul' })}] ${req.method} ${req.url} - Kullanıcı: ${req.headers['x-user'] || 'Misafir'}`);
 
     try {
         await connectDB();
@@ -142,10 +142,10 @@ const getInitialUserData = (username) => ({
     balance: 100000.00,
     portfolio: [],
     history: [],
-    wealthHistory: [{ time: new Date().toLocaleTimeString(), wealth: 100000 }],
+    wealthHistory: [{ time: new Date().toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul' }), wealth: 100000 }],
     wealthSnapshots: {
-        dayStart: { date: new Date().toLocaleDateString('tr-TR'), wealth: 100000 },
-        weekStart: { date: new Date().toLocaleDateString('tr-TR'), wealth: 100000 },
+        dayStart: { date: new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' }), wealth: 100000 },
+        weekStart: { date: new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' }), wealth: 100000 },
         monthStart: { date: `${new Date().getFullYear()}-${new Date().getMonth() + 1}`, wealth: 100000 },
         yearStart: { date: `${new Date().getFullYear()}`, wealth: 100000 }
     },
@@ -350,7 +350,7 @@ const fetchRealMarketData = async () => {
                 let history = chartData.quotes
                     .filter(h => h.close !== null && h.close !== undefined)
                     .map(h => ({
-                        time: h.date.toLocaleTimeString(),
+                        time: h.date.toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul' }),
                         price: h.close,
                         volume: h.volume || 0,
                         high: h.high || h.close,
@@ -434,7 +434,7 @@ const fetchRealMarketData = async () => {
                                         price: stock.price,
                                         commission: commission,
                                         total: totalCost,
-                                        date: new Date().toLocaleString('tr-TR'),
+                                        date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
                                         isAuto: true,
                                         reason: '4\'lü İndikatör Sinyali'
                                     }, ...user.history];
@@ -451,7 +451,7 @@ const fetchRealMarketData = async () => {
                                         price: stock.price,
                                         commission: 0,
                                         total: totalCost,
-                                        date: new Date().toLocaleString('tr-TR'),
+                                        date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
                                         isAuto: true,
                                         reason: `Yetersiz Bakiye! ${config.amount || 1} adet için ${totalCost.toFixed(2)} TL gerekli.`
                                     }, ...user.history];
@@ -480,7 +480,7 @@ const fetchRealMarketData = async () => {
                                         price: stock.price,
                                         commission: commission,
                                         total: netRevenue,
-                                        date: new Date().toLocaleString('tr-TR'),
+                                        date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
                                         isAuto: true,
                                         reason: '4\'lü İndikatör Sinyali'
                                     }, ...user.history];
@@ -521,7 +521,7 @@ const fetchRealMarketData = async () => {
                                             price: stock.price,
                                             commission: commission,
                                             total: netRevenue,
-                                            date: new Date().toLocaleString('tr-TR'),
+                                            date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
                                             isAuto: true,
                                             reason: isSL ? 'Stop-Loss' : 'Take-Profit'
                                         }, ...user.history];
@@ -546,14 +546,14 @@ const fetchRealMarketData = async () => {
                     return acc + (mStock ? mStock.price * item.amount : 0);
                 }, 0);
                 const totalWealth = user.balance + currentPortfolioValue;
-                user.wealthHistory = [...(user.wealthHistory || []), { time: now.toLocaleTimeString(), wealth: totalWealth }].slice(-50);
+                user.wealthHistory = [...(user.wealthHistory || []), { time: now.toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul' }), wealth: totalWealth }].slice(-50);
 
                 // Snapshotları Güncelle
                 if (!user.wealthSnapshots) user.wealthSnapshots = {};
-                const currentDate = now.toLocaleDateString('tr-TR');
+                const currentDate = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
                 const weekStart = new Date(now);
                 weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-                const weekStr = weekStart.toLocaleDateString('tr-TR');
+                const weekStr = weekStart.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
                 const monthStr = `${now.getFullYear()}-${now.getMonth() + 1}`;
 
                 if (!user.wealthSnapshots.dayStart || user.wealthSnapshots.dayStart.date !== currentDate) {
@@ -624,12 +624,12 @@ app.get('/api/user/data', async (req, res) => {
 
         // --- Snapshot İyileştirmesi: Veri istendiğinde snapshot yoksa hemen oluştur ---
         const now = new Date();
-        const todayStr = now.toLocaleDateString('tr-TR');
+        const todayStr = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
         const monthStr = `${now.getFullYear()}-${now.getMonth() + 1}`;
         const yearStr = `${now.getFullYear()}`;
         const weekStart = new Date(now);
         weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-        const weekStr = weekStart.toLocaleDateString('tr-TR');
+        const weekStr = weekStart.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
 
         if (!user.wealthSnapshots) user.wealthSnapshots = {};
 
@@ -740,7 +740,7 @@ app.post('/api/trade/buy', async (req, res) => {
             price: stock.price,
             commission: commission,
             total: totalCost,
-            date: new Date().toLocaleString('tr-TR'),
+            date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
             isAuto: false
         }, ...user.history];
 
@@ -786,7 +786,7 @@ app.post('/api/trade/sell', async (req, res) => {
             price: stock ? stock.price : 0,
             commission: commission,
             total: netRevenue,
-            date: new Date().toLocaleString('tr-TR'),
+            date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
             isAuto: false
         }, ...user.history];
 

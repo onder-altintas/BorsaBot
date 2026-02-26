@@ -606,7 +606,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.27',
+    version: '5.0.28',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError
@@ -850,6 +850,7 @@ app.post('/api/bot/config', async (req, res) => {
         // Bot kapalıyken açıldıysa, eski sinyali unut ki sıradaki ilk AL/SAT sinyalini yakalayabilsin
         if (config.active === true && existing.active !== true) {
             existing.lastSignal = null;
+            config.lastSignal = null; // config spread edildiğinde eski değeri ezmesini engelle
         }
 
         user.botConfigs[symbol] = { ...existing, ...config };

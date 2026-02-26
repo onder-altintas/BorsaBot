@@ -10,7 +10,7 @@ const UserSchema = new mongoose.Schema({
     }],
     history: [{
         id: Number,
-        type: String,
+        type: { type: String },
         symbol: String,
         amount: Number,
         price: Number,

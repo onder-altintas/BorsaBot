@@ -1,17 +1,37 @@
-import React from 'react';
+import React, { useState } from 'react';
 import './History.css';
 
 const History = ({ history }) => {
+    const [filterText, setFilterText] = useState('');
+
+    const filteredHistory = history.filter(item =>
+        item.symbol.toLowerCase().includes(filterText.toLowerCase())
+    );
+
     return (
         <div className="history-container fade-in">
-            <div className="history-header">
-                <h2>İşlem Geçmişi</h2>
-                <p className="text-secondary">Tüm alım ve satım işlemlerinizin dökümü.</p>
+            <div className="history-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                    <h2>İşlem Geçmişi</h2>
+                    <p className="text-secondary">Tüm alım ve satım işlemlerinizin dökümü.</p>
+                </div>
+                <div className="history-filter">
+                    <input
+                        type="text"
+                        placeholder="Hisse ara (örn. THYAO)..."
+                        value={filterText}
+                        onChange={(e) => setFilterText(e.target.value)}
+                        className="market-search" // Reusing standard search input style
+                        style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-main)', outline: 'none' }}
+                    />
+                </div>
             </div>
 
             <div className="card">
-                {history.length === 0 ? (
-                    <p className="text-secondary text-center p-6">Henüz bir işlem yapmadınız.</p>
+                {filteredHistory.length === 0 ? (
+                    <p className="text-secondary text-center p-6">
+                        {history.length === 0 ? "Henüz bir işlem yapmadınız." : "Arama kriterinize uygun işlem bulunamadı."}
+                    </p>
                 ) : (
                     <table className="history-table">
                         <thead>
@@ -25,7 +45,7 @@ const History = ({ history }) => {
                             </tr>
                         </thead>
                         <tbody>
-                            {history.map(item => (
+                            {filteredHistory.map(item => (
                                 <tr key={item.id}>
                                     <td className="text-sm text-secondary">{item.date}</td>
                                     <td>

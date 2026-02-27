@@ -518,64 +518,113 @@ const fetchRealMarketData = async () => {
                                 rec = stock.indicators?.recommendation || 'TUT';
                             }
 
-                            console.log(`[BOT EVAL] User: ${user.username} | Symbol: ${symbol} | Active: ${config.active} | Strat: ${strategyType} | Signal: ${rec} | LastSignal: ${config.lastSignal} | Balance: ${user.balance}`);
+                            // Sinyal değişimi algılama (TUT sinyalini yoksayıyoruz, böylece en son AL veya SAT durumunda kalır)
+                            if (rec === 'AL' || rec === 'SAT') {
+                                if (config.lastSignal !== rec) {
+                                    config.lastSignal = rec;
+                                    config.signalStartTime = Date.now();
+                                    config.lastAction = 'NONE';
+                                    userChanged = true;
+                                    console.log(`[BOT SIGNAL CHANGED] User: ${user.username} | Symbol: ${symbol} | New Signal: ${rec}`);
 
-                            // AL Sinyali İşleme (Sadece yeni sinyalse)
-                            if (rec === 'AL' && config.lastSignal !== 'AL') {
-                                const stockCost = stock.price * (config.amount || 1);
-                                const commission = stockCost * COMMISSION_RATE;
-                                const totalCost = stockCost + commission;
+                                    // Eğer sinyal SAT ise ANINDA satış yap
+                                    if (rec === 'SAT') {
+                                        const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
+                                        if (stockInPortfolio && stockInPortfolio.amount > 0) {
+                                            const sellAmount = stockInPortfolio.amount; // TÜMÜNÜ SAT
+                                            const stockRevenue = stock.price * sellAmount;
+                                            const commission = stockRevenue * COMMISSION_RATE;
+                                            const netRevenue = stockRevenue - commission;
 
-                                console.log(`[BOT ATTEMPT BUY] Try buy ${symbol} for total cost ${totalCost}. Has balance: ${user.balance >= totalCost}`);
+                                            user.balance += netRevenue;
+                                            user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
+                                            user.markModified('portfolio');
 
-                                if (user.balance >= totalCost) {
-                                    user.balance -= totalCost;
-                                    const existing = user.portfolio.find(p => p.symbol === stock.symbol);
-                                    if (existing) {
-                                        const totalOwned = existing.amount + (config.amount || 1);
-                                        existing.averageCost = (existing.averageCost * existing.amount + totalCost) / totalOwned;
-                                        existing.amount = totalOwned;
-                                    } else {
-                                        user.portfolio = [...user.portfolio, { symbol: stock.symbol, amount: (config.amount || 1), averageCost: (totalCost / (config.amount || 1)) }];
+                                            user.history = [{
+                                                id: Date.now() + Math.random(),
+                                                type: 'SATIM',
+                                                symbol: stock.symbol,
+                                                amount: sellAmount,
+                                                price: stock.price,
+                                                commission: commission,
+                                                total: netRevenue,
+                                                date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
+                                                isAuto: true,
+                                                reason: strategyType + ' Sinyali (Anında)'
+                                            }, ...user.history];
+
+                                            config.lastAction = 'SELL';
+                                            userChanged = true;
+                                        }
                                     }
-                                    user.history = [{
-                                        id: Date.now() + Math.random(),
-                                        type: 'ALIM',
-                                        symbol: stock.symbol,
-                                        amount: config.amount || 1,
-                                        price: stock.price,
-                                        commission: commission,
-                                        total: totalCost,
-                                        date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
-                                        isAuto: true,
-                                        reason: '4\'lü İndikatör Sinyali'
-                                    }, ...user.history];
-
-                                    config.lastSignal = 'AL'; // Son işlemi kaydet
-                                    userChanged = true;
-                                } else {
-                                    // Yetersiz bakiye loglaması (Sadece bir kere uyarmak için lastSignal'i AL yapıyoruz)
-                                    user.history = [{
-                                        id: Date.now() + Math.random(),
-                                        type: 'SİSTEM',
-                                        symbol: stock.symbol,
-                                        amount: 0,
-                                        price: stock.price,
-                                        commission: 0,
-                                        total: totalCost,
-                                        date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
-                                        isAuto: true,
-                                        reason: `Yetersiz Bakiye! ${config.amount || 1} adet için ${totalCost.toFixed(2)} TL gerekli.`
-                                    }, ...user.history];
-                                    config.lastSignal = 'AL'; // Uyarıyı verdik, tekrar spam yapmasın
-                                    userChanged = true;
                                 }
                             }
-                            // SAT Sinyali İşleme (Sadece yeni sinyalse)
-                            else if (rec === 'SAT' && config.lastSignal !== 'SAT') {
-                                const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
-                                if (stockInPortfolio && stockInPortfolio.amount > 0) {
-                                    const sellAmount = stockInPortfolio.amount; // TÜMÜNÜ SAT
+
+                            // 1 Saatlik AL Sinyali Bekleme ve İşleme
+                            if (config.lastSignal === 'AL' && config.lastAction !== 'BUY') {
+                                const waitTimeMs = 60 * 60 * 1000; // 1 saat
+                                const elapsed = Date.now() - (config.signalStartTime || Date.now());
+
+                                if (elapsed >= waitTimeMs) {
+                                    const stockCost = stock.price * (config.amount || 1);
+                                    const commission = stockCost * COMMISSION_RATE;
+                                    const totalCost = stockCost + commission;
+
+                                    if (user.balance >= totalCost) {
+                                        user.balance -= totalCost;
+                                        const existing = user.portfolio.find(p => p.symbol === stock.symbol);
+                                        if (existing) {
+                                            const totalOwned = existing.amount + (config.amount || 1);
+                                            existing.averageCost = (existing.averageCost * existing.amount + totalCost) / totalOwned;
+                                            existing.amount = totalOwned;
+                                        } else {
+                                            user.portfolio = [...user.portfolio, { symbol: stock.symbol, amount: (config.amount || 1), averageCost: (totalCost / (config.amount || 1)) }];
+                                        }
+                                        user.history = [{
+                                            id: Date.now() + Math.random(),
+                                            type: 'ALIM',
+                                            symbol: stock.symbol,
+                                            amount: config.amount || 1,
+                                            price: stock.price,
+                                            commission: commission,
+                                            total: totalCost,
+                                            date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
+                                            isAuto: true,
+                                            reason: strategyType + ' Sinyali (1 Saat Gecikmeli)'
+                                        }, ...user.history];
+
+                                        config.lastAction = 'BUY'; // Başarıyla alım yapıldığını kaydet
+                                        userChanged = true;
+                                    } else {
+                                        // Yetersiz bakiye uyarısı (spam yapmamak için lastAction'ı BUY_FAILED veya BUY yapalım)
+                                        user.history = [{
+                                            id: Date.now() + Math.random(),
+                                            type: 'SİSTEM',
+                                            symbol: stock.symbol,
+                                            amount: 0,
+                                            price: stock.price,
+                                            commission: 0,
+                                            total: totalCost,
+                                            date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
+                                            isAuto: true,
+                                            reason: `Yetersiz Bakiye! ${config.amount || 1} adet için ${totalCost.toFixed(2)} TL gerekli.`
+                                        }, ...user.history];
+                                        config.lastAction = 'BUY'; // Tekrar denemesin
+                                        userChanged = true;
+                                    }
+                                }
+                            }
+
+                            // Stop-Loss ve Take-Profit Kontrolleri (İkincil tetikleyiciler)
+                            // (Sadece elde hisse varsa ve bot açıksa çalışır)
+                            const stockInPortfolioSLTP = user.portfolio.find(p => p.symbol === stock.symbol);
+                            if (stockInPortfolioSLTP && config.lastAction !== 'SELL') {
+                                const profitPercent = ((stock.price - stockInPortfolioSLTP.averageCost) / stockInPortfolioSLTP.averageCost) * 100;
+                                const isSL = config.stopLoss && profitPercent <= -Math.abs(config.stopLoss);
+                                const isTP = config.takeProfit && profitPercent >= Math.abs(config.takeProfit);
+
+                                if (isSL || isTP) {
+                                    const sellAmount = stockInPortfolioSLTP.amount;
                                     const stockRevenue = stock.price * sellAmount;
                                     const commission = stockRevenue * COMMISSION_RATE;
                                     const netRevenue = stockRevenue - commission;
@@ -594,52 +643,11 @@ const fetchRealMarketData = async () => {
                                         total: netRevenue,
                                         date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
                                         isAuto: true,
-                                        reason: '4\'lü İndikatör Sinyali'
+                                        reason: isSL ? 'Stop-Loss' : 'Take-Profit'
                                     }, ...user.history];
 
-                                    config.lastSignal = 'SAT'; // Son işlemi kaydet
+                                    config.lastAction = 'SELL';
                                     userChanged = true;
-                                }
-                            }
-                            // Stop-Loss ve Take-Profit Kontrolleri (İkincil tetikleyiciler)
-                            else {
-                                // Sinyalin güncel durumunu unutmamak için (örn. sadece TUT ise son sinyali TUT olarak bırakalım da AL gelirse alsın)
-                                if (rec === 'TUT' && config.lastSignal !== 'TUT') {
-                                    config.lastSignal = 'TUT';
-                                    userChanged = true;
-                                }
-
-                                const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
-                                if (stockInPortfolio) {
-                                    const profitPercent = ((stock.price - stockInPortfolio.averageCost) / stockInPortfolio.averageCost) * 100;
-                                    const isSL = config.stopLoss && profitPercent <= -Math.abs(config.stopLoss);
-                                    const isTP = config.takeProfit && profitPercent >= Math.abs(config.takeProfit);
-
-                                    if (isSL || isTP) {
-                                        const sellAmount = stockInPortfolio.amount;
-                                        const stockRevenue = stock.price * sellAmount;
-                                        const commission = stockRevenue * COMMISSION_RATE;
-                                        const netRevenue = stockRevenue - commission;
-
-                                        user.balance += netRevenue;
-                                        user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
-                                        user.markModified('portfolio');
-
-                                        user.history = [{
-                                            id: Date.now() + Math.random(),
-                                            type: 'SATIM',
-                                            symbol: stock.symbol,
-                                            amount: sellAmount,
-                                            price: stock.price,
-                                            commission: commission,
-                                            total: netRevenue,
-                                            date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
-                                            isAuto: true,
-                                            reason: isSL ? 'Stop-Loss' : 'Take-Profit'
-                                        }, ...user.history];
-                                        config.lastSignal = 'TUT'; // Sattıktan sonra yeniden 'AL' fırsatı yakalayabilmesi için nötre çek
-                                        userChanged = true;
-                                    }
                                 }
                             }
                         }
@@ -716,7 +724,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.30',
+    version: '5.0.3',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError

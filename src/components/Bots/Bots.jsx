@@ -1,7 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './Bots.css';
 
 const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
+    const [, setTick] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => setTick(t => t + 1), 1000);
+        return () => clearInterval(interval);
+    }, []);
     return (
         <div className="bots-container fade-in">
             <div className="bots-header">
@@ -25,14 +31,28 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                     const botConfig = (botConfigs && typeof botConfigs.get === 'function'
                         ? botConfigs.get(stock.symbol)
                         : botConfigs?.[stock.symbol]) || { active: false, amount: 1 };
-                    const strategyType = botConfig.strategy || 'QQE';
-                    const recommendation = strategyType === 'QQE'
-                        ? (stock.indicators?.recommendationQQE || 'TUT')
-                        : (stock.indicators?.recommendation || 'TUT');
+
+                    let displaySignal = botConfig.lastSignal;
+                    if (displaySignal !== 'AL' && displaySignal !== 'SAT') displaySignal = 'BEKLİYOR';
+
+                    let timerDisplay = '--:--';
+                    if (botConfig.signalStartTime && (displaySignal === 'AL' || displaySignal === 'SAT')) {
+                        const elapsed = Date.now() - botConfig.signalStartTime;
+                        const totalSeconds = Math.floor(elapsed / 1000);
+                        const hrs = Math.floor(totalSeconds / 3600);
+                        const mins = Math.floor((totalSeconds % 3600) / 60);
+                        const secs = totalSeconds % 60;
+
+                        if (hrs > 0) {
+                            timerDisplay = `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                        } else {
+                            timerDisplay = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                        }
+                    }
 
                     let recClass = 'badge-hold';
-                    if (recommendation === 'AL') recClass = 'badge-buy';
-                    else if (recommendation === 'SAT') recClass = 'badge-sell';
+                    if (displaySignal === 'AL') recClass = 'badge-buy';
+                    else if (displaySignal === 'SAT') recClass = 'badge-sell';
 
                     return (
                         <div key={stock.symbol} className={`stock-row ${botConfig.active ? 'bot-active-row' : ''}`}>
@@ -43,10 +63,15 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                             <div className="stock-price font-bold">
                                 ₺{stock.price.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
                             </div>
-                            <div className="stock-recommendation">
+                            <div className="stock-recommendation" style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
                                 <span className={`recommendation-badge ${recClass}`}>
-                                    {recommendation}
+                                    {displaySignal}
                                 </span>
+                                {botConfig.active && timerDisplay !== '--:--' && (
+                                    <span className="text-xs font-bold text-accent" style={{ whiteSpace: 'nowrap' }}>
+                                        ⏱ {timerDisplay}
+                                    </span>
+                                )}
                             </div>
                             <div className="stock-bot-strategy">
                                 <select

@@ -291,47 +291,45 @@ const calculateIndicators = (history, currentPrice, symbol) => {
 
     // GÜVENLİK FİLTRESİ: GÜÇLÜ ifadeleri tamamen kaldırıldı
 
-    // --- QQE İNDİKATÖRÜ EKLENTİSİ ---
-    const rsiLength = 14;
-    const ssf = 5;
+    // --- QQE İNDİKATÖRÜ EKLENTİSİ (CUSTOM PINE SCRIPT) ---
+    const rsiLength = 15;
+    const ssf = 14;
 
-    const calculateWildersRSI = (data, period) => {
+    const calculateRMATV = (data, period) => {
+        let rmaArr = [data[0]];
+        let alpha = 1 / period;
+        for (let i = 1; i < data.length; i++) {
+            const val = data[i] !== undefined ? data[i] : rmaArr[i - 1];
+            rmaArr[i] = alpha * val + (1 - alpha) * rmaArr[i - 1];
+        }
+        return rmaArr;
+    };
+
+    const calculateRSITV = (data, period) => {
+        if (data.length < 2) return data.map(() => 50);
+        let gains = [0];
+        let losses = [0];
+
+        for (let i = 1; i < data.length; i++) {
+            const change = data[i] - data[i - 1];
+            gains.push(Math.max(0, change));
+            losses.push(Math.max(0, -change));
+        }
+
+        let avgGains = calculateRMATV(gains, period);
+        let avgLosses = calculateRMATV(losses, period);
+
         let rsiArr = [];
-        if (data.length < period) return data.map(() => 50);
-
-        let gains = 0, losses = 0;
-        for (let i = 1; i <= period; i++) {
-            const diff = data[i] - data[i - 1];
-            if (diff > 0) gains += diff;
-            else losses -= diff;
-        }
-        let avgGain = gains / period;
-        let avgLoss = losses / period;
-
-        rsiArr[period] = avgLoss === 0 ? 100 : 100 - (100 / (1 + (avgGain / avgLoss)));
-
-        for (let i = period + 1; i < data.length; i++) {
-            const diff = data[i] - data[i - 1];
-            const gain = diff > 0 ? diff : 0;
-            const loss = diff < 0 ? -diff : 0;
-
-            avgGain = (avgGain * (period - 1) + gain) / period;
-            avgLoss = (avgLoss * (period - 1) + loss) / period;
-
-            let rs = avgGain / avgLoss;
-            rsiArr[i] = avgLoss === 0 ? 100 : 100 - (100 / (1 + rs));
-        }
-
-        for (let i = 0; i <= period; i++) {
-            if (rsiArr[i] === undefined) rsiArr[i] = rsiArr[period] || 50;
+        for (let i = 0; i < data.length; i++) {
+            if (avgLosses[i] === 0) rsiArr.push(100);
+            else rsiArr.push(100 - (100 / (1 + (avgGains[i] / avgLosses[i]))));
         }
         return rsiArr;
     };
 
     const calculateEMAArray = (data, period) => {
-        let emaArr = [];
+        let emaArr = [data[0]];
         let alpha = 2 / (period + 1);
-        emaArr[0] = data[0];
         for (let i = 1; i < data.length; i++) {
             const val = data[i] !== undefined ? data[i] : emaArr[i - 1];
             emaArr[i] = alpha * val + (1 - alpha) * emaArr[i - 1];
@@ -339,7 +337,7 @@ const calculateIndicators = (history, currentPrice, symbol) => {
         return emaArr;
     };
 
-    let rsiRaw = calculateWildersRSI(prices, rsiLength);
+    let rsiRaw = calculateRSITV(prices, rsiLength);
     let RSII = calculateEMAArray(rsiRaw, ssf);
     let QQEF = RSII;
 

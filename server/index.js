@@ -292,8 +292,8 @@ const calculateIndicators = (history, currentPrice, symbol) => {
     // GÜVENLİK FİLTRESİ: GÜÇLÜ ifadeleri tamamen kaldırıldı
 
     // --- QQE İNDİKATÖRÜ EKLENTİSİ ---
-    const rsiLength = 15;
-    const ssf = 14;
+    const rsiLength = 14;
+    const ssf = 5;
 
     const calculateWildersRSI = (data, period) => {
         let rsiArr = [];
@@ -724,7 +724,7 @@ if (isAtlasOnline) {
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.3',
+    version: '5.0.4',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError

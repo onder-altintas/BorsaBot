@@ -18,7 +18,9 @@ const Login = ({ onLogin }) => {
             const validUsers = [
                 { user: 'önder', pass: '123' },
                 { user: 'samet', pass: '123' },
-                { user: 'cem', pass: '123' }
+                { user: 'cem', pass: '123' },
+                { user: 'mümin', pass: '123' },
+                { user: 'mumin', pass: '123' }
             ];
 
             const foundUser = validUsers.find(

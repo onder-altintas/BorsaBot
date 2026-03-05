@@ -10,45 +10,40 @@ const User = require('./models/User');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-let isAtlasOnline = false;
+
 let lastMarketFetchTime = 0;
 const MARKETS_CACHE_TTL = 20000; // 20 saniye
 let globalFetchError = null;
 
-// MongoDB Connection with improved error handling for Serverless
-mongoose.set('bufferCommands', false); // Mongoose'un veritabanına bağlanmadan işlemleri askıya almasını (buffering) devre dışı bırak.
+// MongoDB Bağlantısı
+mongoose.set('bufferCommands', false);
 
 const connectDB = async () => {
     if (mongoose.connection.readyState >= 1) {
-        isAtlasOnline = true;
         return mongoose.connection;
     }
 
     if (!process.env.MONGODB_URI) {
-        throw new Error("MONGODB_URI ortam değişkeni eksik! Lütfen Vercel panelinden ayarlayın.");
+        throw new Error('MONGODB_URI ortam değişkeni eksik!');
     }
 
     try {
         await mongoose.connect(process.env.MONGODB_URI, {
-            serverSelectionTimeoutMS: 5000 // 5 saniye içinde bağlanamazsa hata ver
+            serverSelectionTimeoutMS: 5000
         });
-        isAtlasOnline = true;
-        console.log('✅ MongoDB Atlas Bağlantısı Başarılı');
-        await migrateSymbols(); // Bağlantıdan sonra sembol migrasyonunu çalıştır
+        console.log('✅ MongoDB Bağlantısı Başarılı');
+        await migrateSymbols();
         return mongoose.connection;
     } catch (err) {
-        isAtlasOnline = false;
-        console.error('❌ MongoDB Atlas Bağlantısı Başarısız:', err.message);
+        console.error('❌ MongoDB Bağlantısı Başarısız:', err.message);
         throw err;
     }
 };
 
-// CORS Configuration
+// CORS Ayarları
 const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:3000',
-    'https://borsa-bot-khaki.vercel.app',
-    'https://borsabot.vercel.app',
     'http://88.198.174.52:5000',
     'http://88.198.174.52'
 ];
@@ -56,7 +51,7 @@ const allowedOrigins = [
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1 && !origin.endsWith('.vercel.app')) {
+        if (allowedOrigins.indexOf(origin) === -1) {
             const msg = 'Bu domain için CORS politikası erişime izin vermiyor.';
             return callback(new Error(msg), false);
         }
@@ -70,18 +65,17 @@ app.use(express.json());
 
 let activeFetchPromise = null;
 
-// İstek Günlükçü ve Vercel-Bot Tetikleyici Middleware
+// İstek Günlükçü Middleware
 app.use('/api', async (req, res, next) => {
     console.log(`[${new Date().toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul' })}] ${req.method} ${req.url} - Kullanıcı: ${req.headers['x-user'] || 'Misafir'}`);
 
     try {
         await connectDB();
     } catch (err) {
-        return res.status(503).json({ error: "Veritabanına bağlanılamadı. Vercel ortam değişkenlerini veya MongoDB IP izinlerini kontrol edin.", details: err.message });
+        return res.status(503).json({ error: 'Veritabanına bağlanılamadı.', details: err.message });
     }
 
     const now = Date.now();
-    // Veri zaman aşımına uğradıysa veya fiyatlar hala 0 ise (Cold Start)
     if (now - lastMarketFetchTime > MARKETS_CACHE_TTL || (marketData[0] && marketData[0].price === 0)) {
         if (!activeFetchPromise) {
             console.log("FETCH REAL MARKET DATA TETIKLENDI (Fiyat 0 veya sure doldu)");
@@ -712,15 +706,8 @@ const fetchRealMarketData = async () => {
     }
 };
 
-// Vercel Serverless ortamında veriler her istekte değil 20 saniyede bir güncellenecek
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-    setInterval(fetchRealMarketData, 20000); // Local'de 20 saniyeye çektik.
-}
-
-// Başlatırken bir kez veri çekmeyi dene
-if (isAtlasOnline) {
-    fetchRealMarketData();
-}
+// Piyasa verilerini 20 saniyede bir güncelle
+setInterval(fetchRealMarketData, 20000);
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
@@ -995,23 +982,11 @@ app.use((req, res, next) => {
     res.sendFile(path.join(__dirname, '../dist', 'index.html'));
 });
 
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-    app.listen(PORT, '0.0.0.0', async () => {
-        console.log(`Sunucu ${PORT} portunda çalışıyor`);
-        try {
-            await connectDB();
-            let user = await User.findOne({ username: 'testuser' });
-            if (!user) user = await User.create(getInitialUserData('testuser'));
-            if (!user.botConfigs || user.botConfigs instanceof Map) user.botConfigs = {};
-            const existing = user.botConfigs['BIMAS.IS'] || {};
-            user.botConfigs['BIMAS.IS'] = { ...existing, active: true };
-            user.markModified('botConfigs');
-            await user.save();
-            console.log("BOT CONFIG SAVE TEST PASSED");
-        } catch (e) {
-            console.error("BOT CONFIG SAVE TEST FAILED:", e);
-        }
-    });
-}
-
-module.exports = app;
+app.listen(PORT, '0.0.0.0', async () => {
+    console.log(`Sunucu ${PORT} portunda çalışıyor`);
+    try {
+        await connectDB();
+    } catch (e) {
+        console.error('Veritabanı başlatma hatası:', e.message);
+    }
+});

@@ -1,13 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
-const getApiBaseUrl = () => {
-    // Vercel veya production ortamlarında dışarıdaki backend'e bağlanabilmek için
-    // artık VITE_API_BASE_URL'i dinlemesine izin veriyoruz.
-    if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
-    return 'http://88.198.174.52:5000/api';
-};
+const API_BASE_URL = 'http://88.198.174.52:5000/api';
 
-const API_BASE_URL = getApiBaseUrl();
 
 export const useTrading = (currentUser) => {
     const [balance, setBalance] = useState(100000);
@@ -23,8 +17,6 @@ export const useTrading = (currentUser) => {
 
     const fetchData = async () => {
         if (!currentUser) return;
-        // Strict 5s timeout removed to accommodate Vercel cold starts which take 5-8s combined.
-
         try {
             const [marketRes, userRes] = await Promise.all([
                 fetch(`${API_BASE_URL}/market?t=${Date.now()}`),

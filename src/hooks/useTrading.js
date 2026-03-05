@@ -4,7 +4,7 @@ const getApiBaseUrl = () => {
     // Vercel veya production ortamlarında dışarıdaki backend'e bağlanabilmek için
     // artık VITE_API_BASE_URL'i dinlemesine izin veriyoruz.
     if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
-    return 'http://localhost:5000/api';
+    return 'http://88.198.174.52:5000/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();

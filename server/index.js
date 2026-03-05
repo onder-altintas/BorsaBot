@@ -985,7 +985,7 @@ app.post('/api/bot/config', async (req, res) => {
 app.use(express.static(path.join(__dirname, '../dist')));
 
 // Catch-all route to serve the frontend's index.html for unknown paths (SPA routing)
-app.get('*', (req, res) => {
+app.get('(.*)', (req, res) => {
     // Exclude /api routes from this catch-all just in case
     if (req.path.startsWith('/api/')) {
         return res.status(404).json({ error: 'API endpoint not found' });

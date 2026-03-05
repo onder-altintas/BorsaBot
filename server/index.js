@@ -48,7 +48,9 @@ const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:3000',
     'https://borsa-bot-khaki.vercel.app',
-    'https://borsabot.vercel.app'
+    'https://borsabot.vercel.app',
+    'http://88.198.174.52:5000',
+    'http://88.198.174.52'
 ];
 
 app.use(cors({

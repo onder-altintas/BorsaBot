@@ -386,9 +386,9 @@ const calculateIndicators = (history, currentPrice, symbol) => {
     let currentQQES = QQES[QQES.length - 1];
     let prevQQES_val = QQES[QQES.length - 2];
 
-    let recommendationQQE = 'TUT';
-    if (currentQQEF > currentQQES && prevQQEF_val <= prevQQES_val) recommendationQQE = 'AL';
-    else if (currentQQEF < currentQQES && prevQQEF_val >= prevQQES_val) recommendationQQE = 'SAT';
+    // QQE sinyali: QQEF > QQES → AL trendi, QQEF < QQES → SAT trendi (TUT üretmez)
+    // Pine Script'teki fill renklendirmesiyle aynı mantık: mavi = AL bölgesi, kırmızı = SAT bölgesi
+    let recommendationQQE = currentQQEF > currentQQES ? 'AL' : 'SAT';
 
     return {
         sma5: parseFloat(sma5.toFixed(2)),
@@ -512,14 +512,14 @@ const fetchRealMarketData = async () => {
                                 rec = stock.indicators?.recommendation || 'TUT';
                             }
 
-                            // Sinyal değişimi algılama (TUT sinyalini yoksayıyoruz, böylece en son AL veya SAT durumunda kalır)
+                            // Sinyal değişimi algılama
                             if (rec === 'AL' || rec === 'SAT') {
                                 if (config.lastSignal !== rec) {
                                     config.lastSignal = rec;
                                     config.signalStartTime = Date.now();
                                     config.lastAction = 'NONE';
                                     userChanged = true;
-                                    console.log(`[BOT SIGNAL CHANGED] User: ${user.username} | Symbol: ${symbol} | New Signal: ${rec}`);
+                                    console.log(`[BOT SIGNAL CHANGED] User: ${user.username} | Symbol: ${symbol} | New Signal: ${rec} | Timer Reset`);
 
                                     // Eğer sinyal SAT ise ANINDA satış yap
                                     if (rec === 'SAT') {
@@ -552,12 +552,28 @@ const fetchRealMarketData = async () => {
                                         }
                                     }
                                 }
+                            } else {
+                                // TUT sinyali geldiğinde lastSignal'i sıfırla ki bir sonraki AL yeni sayaç başlatsın
+                                if (config.lastSignal === 'AL' && config.lastAction === 'BUY') {
+                                    config.lastSignal = 'TUT';
+                                    userChanged = true;
+                                } else if (config.lastSignal === 'SAT' && config.lastAction === 'SELL') {
+                                    config.lastSignal = 'TUT';
+                                    userChanged = true;
+                                }
                             }
 
                             // 1 Saatlik AL Sinyali Bekleme ve İşleme
                             if (config.lastSignal === 'AL' && config.lastAction !== 'BUY') {
+                                // signalStartTime eksikse şimdi başlat (eski kayıtlar için güvenlik)
+                                if (!config.signalStartTime) {
+                                    config.signalStartTime = Date.now();
+                                    userChanged = true;
+                                    console.log(`[BOT] signalStartTime eksikti, şimdi başlatıldı: ${user.username} | ${symbol}`);
+                                }
                                 const waitTimeMs = 60 * 60 * 1000; // 1 saat
-                                const elapsed = Date.now() - (config.signalStartTime || Date.now());
+                                const elapsed = Date.now() - config.signalStartTime;
+                                console.log(`[BOT TIMER] ${user.username} | ${symbol} | Gecen: ${Math.round(elapsed / 60000)}dk / 60dk`);
 
                                 if (elapsed >= waitTimeMs) {
                                     const stockCost = stock.price * (config.amount || 1);

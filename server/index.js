@@ -418,7 +418,7 @@ const calculateIndicators = (history, currentPrice, symbol) => {
 // Gerçek piyasa verilerini Yahoo Finance üzerinden çekme fonksiyonu
 const fetchRealMarketData = async () => {
     try {
-        if (!isAtlasOnline) return;
+
 
         const now = new Date();
         const symbols = marketData.map(s => s.symbol);

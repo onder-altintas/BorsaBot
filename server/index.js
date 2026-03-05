@@ -727,7 +727,7 @@ setInterval(fetchRealMarketData, 20000);
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.0.4',
+    version: '5.0.5',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError

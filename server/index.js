@@ -994,7 +994,7 @@ app.get('*', (req, res) => {
 });
 
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-    app.listen(PORT, async () => {
+    app.listen(PORT, '0.0.0.0', async () => {
         console.log(`Sunucu ${PORT} portunda çalışıyor`);
         try {
             await connectDB();

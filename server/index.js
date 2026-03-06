@@ -288,8 +288,9 @@ const calculateIndicators = (history, currentPrice, symbol) => {
     // GÜVENLİK FİLTRESİ: GÜÇLÜ ifadeleri tamamen kaldırıldı
 
     // --- QQE İNDİKATÖRÜ EKLENTİSİ (CUSTOM PINE SCRIPT) ---
-    const rsiLength = 15;
-    const ssf = 14;
+    const rsiLength = 14;
+    const ssf = 5;
+    const qqeFactor = 4.236;
 
     const calculateRMATV = (data, period) => {
         let rmaArr = [data[0]];
@@ -342,26 +343,19 @@ const calculateIndicators = (history, currentPrice, symbol) => {
         TR.push(Math.abs(RSII[i] - RSII[i - 1]));
     }
 
-    let wwalpha = 1 / rsiLength;
-    let WWMA = [0];
-    for (let i = 1; i < TR.length; i++) {
-        let prevWWMA = WWMA[i - 1] || 0;
-        WWMA.push(wwalpha * TR[i] + (1 - wwalpha) * prevWWMA);
-    }
-
-    let ATRRSI = [0];
-    for (let i = 1; i < WWMA.length; i++) {
-        let prevATRRSI = ATRRSI[i - 1] || 0;
-        ATRRSI.push(wwalpha * WWMA[i] + (1 - wwalpha) * prevATRRSI);
-    }
+    // Pine Script'te dar = ema(ema(TR, 27), 27) * 4.236
+    let emaPeriod = 27; 
+    let MaAtrRsi = calculateEMAArray(TR, emaPeriod);
+    let dar_ema = calculateEMAArray(MaAtrRsi, emaPeriod);
+    let dar = dar_ema.map(v => v * qqeFactor);
 
     let QUP = [];
     let QDN = [];
     let QQES = [];
 
     for (let i = 0; i < QQEF.length; i++) {
-        QUP.push(QQEF[i] + ATRRSI[i] * 4.236);
-        QDN.push(QQEF[i] - ATRRSI[i] * 4.236);
+        QUP.push(QQEF[i] + dar[i]);
+        QDN.push(QQEF[i] - dar[i]);
 
         if (i === 0) {
             QQES.push(0);
@@ -373,10 +367,15 @@ const calculateIndicators = (history, currentPrice, symbol) => {
 
         let currentQQES = prevQQES;
 
-        if (QUP[i] < prevQQES) currentQQES = QUP[i];
-        else if (QQEF[i] > prevQQES && prevQQEF < prevQQES) currentQQES = QDN[i];
-        else if (QDN[i] > prevQQES) currentQQES = QDN[i];
-        else if (QQEF[i] < prevQQES && prevQQEF > prevQQES) currentQQES = QUP[i];
+        if (QUP[i] < prevQQES) {
+            currentQQES = QUP[i];
+        } else if (QQEF[i] > prevQQES && prevQQEF < prevQQES) {
+            currentQQES = QDN[i];
+        } else if (QDN[i] > prevQQES) {
+            currentQQES = QDN[i];
+        } else if (QQEF[i] < prevQQES && prevQQEF > prevQQES) {
+            currentQQES = QUP[i];
+        }
 
         QQES.push(currentQQES);
     }

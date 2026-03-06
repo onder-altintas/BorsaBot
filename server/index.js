@@ -491,7 +491,7 @@ const fetchRealMarketData = async () => {
         }
 
         // Kullanıcı işlemleri ve botları yönet
-        if (isAtlasOnline) {
+        if (mongoose.connection.readyState === 1) {
             const usersToProcess = await User.find({});
             for (let user of usersToProcess) {
                 let userChanged = false;

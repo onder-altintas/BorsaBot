@@ -22,4 +22,5 @@ jobs:
           git reset --hard
           git pull origin main
           npm install
+          cd server && npm install && cd ..
           pm2 restart borsabot || pm2 restart server/index.js || npm run start:server

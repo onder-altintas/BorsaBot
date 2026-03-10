@@ -18,6 +18,7 @@ import {
 import History from './components/History/History';
 import Bots from './components/Bots/Bots';
 import Login from './components/Login/Login';
+import News from './components/News/News';
 import { useEffect } from 'react';
 
 function App() {
@@ -445,6 +446,10 @@ function App() {
               botConfigs={botConfigs}
               onUpdateBot={updateBotConfig}
             />
+          )}
+
+          {activeTab === 'news' && (
+            <News portfolio={portfolio} />
           )}
         </section>
       </main>

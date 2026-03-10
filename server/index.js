@@ -6,6 +6,8 @@ const mongoose = require('mongoose');
 const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
 const User = require('./models/User');
+const KapNews = require('./models/KapNews');
+const { startKapPollingService } = require('./services/kapService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -985,6 +987,59 @@ app.post('/api/bot/config', async (req, res) => {
     }
 });
 
+// ==================== KAP HABER API'LERİ ====================
+
+/**
+ * GET /api/kap-news
+ * Tüm izlenen hisseler için son haberleri döner.
+ * Query params: ?symbol=THYAO&limit=20
+ */
+app.get('/api/kap-news', async (req, res) => {
+    try {
+        const { symbol, limit = 30 } = req.query;
+        const query = {};
+
+        if (symbol) {
+            // Birden fazla sembol virgülle gelebilir: ?symbol=THYAO,GARAN
+            const symbols = symbol.split(',').map(s => s.trim().replace('.IS', '').toUpperCase());
+            query.symbol = { $in: symbols };
+        }
+
+        const news = await KapNews.find(query)
+            .sort({ publishedAt: -1 })
+            .limit(parseInt(limit))
+            .lean();
+
+        res.json({ success: true, data: news, total: news.length });
+    } catch (err) {
+        console.error('[API] /api/kap-news hatası:', err.message);
+        res.status(500).json({ success: false, error: 'Haberler alınamadı.' });
+    }
+});
+
+/**
+ * GET /api/kap-news/:symbol
+ * Belirli bir hisse için son haberleri döner.
+ */
+app.get('/api/kap-news/:symbol', async (req, res) => {
+    try {
+        const symbol = req.params.symbol.replace('.IS', '').toUpperCase();
+        const limit = parseInt(req.query.limit) || 20;
+
+        const news = await KapNews.find({ symbol })
+            .sort({ publishedAt: -1 })
+            .limit(limit)
+            .lean();
+
+        res.json({ success: true, data: news, symbol });
+    } catch (err) {
+        console.error(`[API] /api/kap-news/${req.params.symbol} hatası:`, err.message);
+        res.status(500).json({ success: false, error: 'Haberler alınamadı.' });
+    }
+});
+
+// ==================== FRONTEND STATIC ====================
+
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, '../dist')));
 
@@ -1001,6 +1056,8 @@ app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Sunucu ${PORT} portunda çalışıyor`);
     try {
         await connectDB();
+        // KAP bildirim takip servisini başlat
+        startKapPollingService();
     } catch (e) {
         console.error('Veritabanı başlatma hatası:', e.message);
     }

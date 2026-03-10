@@ -23,6 +23,7 @@ jobs:
           git pull origin main
           npm install
           cd server && npm install && cd ..
-          pm2 restart borsabot || pm2 start server/index.js --name borsabot
+          pm2 delete all || true
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} pm2 start server/index.js --name borsabot
           sleep 5
-          pm2 logs borsabot --lines 30 --nostream
+          pm2 logs borsabot --lines 40 --nostream

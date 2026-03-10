@@ -23,4 +23,6 @@ jobs:
           git pull origin main
           npm install
           cd server && npm install && cd ..
-          pm2 restart borsabot || pm2 restart server/index.js || npm run start:server
+          pm2 restart borsabot || pm2 start server/index.js --name borsabot
+          sleep 5
+          pm2 logs borsabot --lines 30 --nostream

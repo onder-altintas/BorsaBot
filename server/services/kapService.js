@@ -133,12 +133,13 @@ async function runKapPolling() {
     }
 
     if (totalSaved > 0) {
-        console.log(`[KAP] Toplam ${totalSaved} yeni bildirim kaydedildi. Gemini yorumları üretiliyor...`);
-        // Yeni haberler varsa AI yorumlarını üret
-        await processPendingComments();
+        console.log(`[KAP] Toplam ${totalSaved} yeni bildirim kaydedildi.`);
     } else {
         console.log('[KAP] Yeni bildirim bulunamadı.');
     }
+    
+    // Her halükarda bekleyen veya hata almış yorumlar için tekrar dene
+    await processPendingComments();
 }
 
 /**

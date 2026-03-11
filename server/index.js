@@ -1037,6 +1037,39 @@ app.get('/api/kap-news/:symbol', async (req, res) => {
         res.status(500).json({ success: false, error: 'Haberler alınamadı.' });
     }
 });
+/**
+ * POST /api/kap-news/:id/analyze
+ * Belirli bir haber için anında AI yorumu üretir.
+ */
+app.post('/api/kap-news/:id/analyze', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const newsItem = await KapNews.findById(id);
+        
+        if (!newsItem) {
+            return res.status(404).json({ success: false, error: 'Haber bulunamadı.' });
+        }
+
+        if (newsItem.aiComment) {
+            return res.json({ success: true, aiComment: newsItem.aiComment });
+        }
+
+        const { generateCommentForNews } = require('./services/geminiService');
+        const comment = await generateCommentForNews(newsItem);
+        
+        if (comment) {
+            newsItem.aiComment = comment;
+            newsItem.aiCommentAt = new Date();
+            await newsItem.save();
+            res.json({ success: true, aiComment: comment });
+        } else {
+            res.status(500).json({ success: false, error: 'Yorum üretilemedi (API hatası veya kota sorunu).' });
+        }
+    } catch (err) {
+        console.error(`[API] /api/kap-news/analyze hatası:`, err.message);
+        res.status(500).json({ success: false, error: 'Yorum üretirken bir hata oluştu.' });
+    }
+});
 
 // ==================== FRONTEND STATIC ====================
 

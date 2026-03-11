@@ -27,7 +27,27 @@ function isNew(dateStr) {
 
 export function NewsCard({ news }) {
     const [expanded, setExpanded] = useState(false);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [localComment, setLocalComment] = useState(news.aiComment);
     const newsIsNew = isNew(news.publishedAt);
+
+    const handleAnalyze = async () => {
+        if (isAnalyzing) return;
+        setIsAnalyzing(true);
+        try {
+            const res = await fetch(`/api/kap-news/${news._id}/analyze`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success && data.aiComment) {
+                setLocalComment(data.aiComment);
+            } else {
+                alert(data.error || 'Yorum üretilemedi.');
+            }
+        } catch (err) {
+            alert('Bir hata oluştu, lütfen tekrar deneyin.');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
 
     return (
         <div className={`news-card ${newsIsNew ? 'is-new' : ''}`}>
@@ -73,14 +93,26 @@ export function NewsCard({ news }) {
                     <span className="news-ai-label">Yapay Zeka Yorumu</span>
                 </div>
 
-                {news.aiComment ? (
-                    <p className="news-ai-comment">{news.aiComment}</p>
+                {localComment ? (
+                    <p className="news-ai-comment">{localComment}</p>
                 ) : (
                     <div className="news-ai-pending">
-                        <div className="ai-dots">
-                            <span /><span /><span />
-                        </div>
-                        <span>Yorum hazırlanıyor...</span>
+                        {isAnalyzing ? (
+                            <>
+                                <div className="ai-dots">
+                                    <span /><span /><span />
+                                </div>
+                                <span>Yorum hazırlanıyor...</span>
+                            </>
+                        ) : (
+                            <button 
+                                onClick={handleAnalyze} 
+                                className="btn-small" 
+                                style={{ background: 'var(--accent)', color: 'white', padding: '4px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            >
+                                ✨ Yorum Üret
+                            </button>
+                        )}
                     </div>
                 )}
             </div>

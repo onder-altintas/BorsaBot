@@ -26,7 +26,6 @@ async function generateCommentForNews(news) {
     }
 
     try {
-        const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
         const prompt = `
 Sen bir Türk borsa analistisin. Aşağıdaki KAP (Kamuyu Aydınlatma Platformu) bildirimini kısa ve net şekilde yorumla.
 
@@ -42,9 +41,27 @@ Lütfen şu formatta yanıtla (toplamda 3-4 cümle):
 
 Önemli: Kesin alım/satım tavsiyesi VERME. Sadece haberi yorumla. Türkçe yaz.
         `.trim();
+        let comment = null;
+        let lastError = null;
+        const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro-latest', 'gemini-pro'];
 
-        const result = await model.generateContent(prompt);
-        const comment = result.response.text().trim();
+        for (const modelName of modelsToTry) {
+            try {
+                const model = ai.getGenerativeModel({ model: modelName });
+                const result = await model.generateContent(prompt);
+                comment = result.response.text().trim();
+                break; // Basarili olursa donguden cik
+            } catch (e) {
+                console.warn(`[Gemini] Model ${modelName} basarisiz (${e.status || e.message}). Diger modele geciliyor...`);
+                lastError = e;
+            }
+        }
+
+        if (!comment) {
+            console.error(`[Gemini] Hicbir model calismadi. Son hata:`, lastError?.message);
+            return null;
+        }
+
         return comment;
     } catch (err) {
         console.error(`[Gemini] Yorum üretme hatası (${news.symbol}):`, err.message);

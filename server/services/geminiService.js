@@ -61,30 +61,36 @@ async function processPendingComments() {
     if (!ai) return;
 
     try {
-        // Sadece aiComment'i null olan, son 48 saat içinde eklenen haberleri al
+        console.log('[Gemini DEBUG] API baglantisi kuruluyor...');
         const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+        console.log(`[Gemini DEBUG] Cutoff date: ${cutoff}`);
+
         const pendingNews = await KapNews.find({
             aiComment: null,
             createdAt: { $gte: cutoff }
         }).limit(10).sort({ publishedAt: -1 });
+
+        console.log(`[Gemini DEBUG] db'den cekilen pendingNews sayisi: ${pendingNews.length}`);
 
         if (pendingNews.length === 0) return;
 
         console.log(`[Gemini] ${pendingNews.length} haber için yorum üretiliyor...`);
 
         for (const news of pendingNews) {
+            console.log(`[Gemini DEBUG] ID: ${news._id}, Symbol: ${news.symbol} icin yorum uretimi basliyor...`);
             const comment = await generateCommentForNews(news);
             if (comment) {
                 news.aiComment = comment;
                 news.aiCommentAt = new Date();
                 await news.save();
                 console.log(`[Gemini] Yorum üretildi: ${news.symbol} - ${news.title.substring(0, 50)}...`);
+            } else {
+                console.log(`[Gemini DEBUG] ID: ${news._id} icin uretim BASARISIZ veya return NULL (Loglari kontrol edin).`);
             }
-            // Rate limit koruması: istekler arasında 2 saniye bekle
             await new Promise(r => setTimeout(r, 2000));
         }
     } catch (err) {
-        console.error('[Gemini] processPendingComments hatası:', err.message);
+        console.error('[Gemini DEBUG] processPendingComments kokundeki hata:', err);
     }
 }
 

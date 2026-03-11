@@ -25,6 +25,6 @@ jobs:
           rm -rf server/node_modules
           cd server && npm install && cd ..
           pm2 delete all || true
-          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} pm2 start server/index.js --name borsabot
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }} pm2 start server/index.js --name borsabot
           sleep 8
           pm2 logs borsabot --lines 40 --nostream

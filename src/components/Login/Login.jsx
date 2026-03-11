@@ -20,7 +20,10 @@ const Login = ({ onLogin }) => {
                 { user: 'samet', pass: '123' },
                 { user: 'cem', pass: '123' },
                 { user: 'mümin', pass: '123' },
-                { user: 'mumin', pass: '123' }
+                { user: 'mumin', pass: '123' },
+                { user: 'tayfun', pass: '123' },
+                { user: 'özgür', pass: '123' },
+                { user: 'ozgur', pass: '123' }
             ];
 
             const foundUser = validUsers.find(

@@ -21,130 +21,59 @@ const BIST_SYMBOLS = [
 
 const KAP_BASE_URL = 'https://www.kap.org.tr';
 
+const xml2js = require('xml2js');
+const util = require('util');
+const parseXml = util.promisify(xml2js.parseString);
+
 /**
- * Belirli bir hisse için KAP bildirimlerini çeker.
- * kap.org.tr'nin bildirim listesi sayfasını parse eder.
+ * Belirli bir hisse için haberleri çeker.
+ * kap.org.tr'nin WAF'i nedeniyle alternatif olarak Google News RSS'ten KAP araması yapar.
  */
 async function fetchKapNewsForSymbol(symbol) {
     const cleanSymbol = symbol.replace('.IS', '');
-    const url = `${KAP_BASE_URL}/tr/bildirim-sorgu?sectionType=index&textTypeName=&orderBy=date&orderDir=desc&isLarge=false&owner=member&indexType=0&period=&year=&term=&ruleType=&bdkReview=&disclosureClass=&index=&stock=${cleanSymbol}&kriterler=&kategori=&raporTur=&sectorId=&bgfId=`;
+    const url = `https://news.google.com/rss/search?q=${cleanSymbol}+KAP&hl=tr&gl=TR&ceid=TR:tr`;
 
     const response = await axios.get(url, {
         timeout: 10000,
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'tr-TR,tr;q=0.9,en;q=0.8',
-            'Accept-Encoding': 'gzip, deflate',
-            'Referer': 'https://www.kap.org.tr/',
-        },
-        responseEncoding: 'utf8'
+            'Accept-Language': 'tr-TR,tr;q=0.9',
+        }
     });
 
-    const $ = cheerio.load(response.data);
-    const items = [];
+    const result = await parseXml(response.data);
+    const channel = result?.rss?.channel?.[0];
+    const items = channel?.item || [];
 
-    // KAP bildirim satırlarını parse et
-    $('.notification-row, .w-clearfix.w-inline-block.comp-row').each((i, el) => {
-        const $el = $(el);
+    const newsItems = [];
 
-        const titleEl = $el.find('.notification-title, .comp-text, h5, .basic-text-area');
-        const dateEl = $el.find('.notification-date, .comp-date, .column-date');
-        const linkEl = $el.find('a').first();
+    for (const item of items) {
+        let title = item.title?.[0] || '';
+        const link = item.link?.[0] || '';
+        const pubDateText = item.pubDate?.[0] || '';
+        
+        // Remove source name from title if it exists (e.g. "- Hürriyet")
+        title = title.replace(/\s-\s[^-]+$/, '');
 
-        const title = titleEl.first().text().trim();
-        const dateText = dateEl.first().text().trim();
-        const href = linkEl.attr('href') || '';
+        if (!title || title.length < 5) continue;
 
-        if (!title || title.length < 5) return;
+        let publishedAt = new Date(pubDateText);
+        if (isNaN(publishedAt.getTime())) publishedAt = new Date();
 
-        // Tarih parse etme (DD.MM.YYYY HH:MM veya YYYY-MM-DD formatları)
-        let publishedAt = parseTurkishDate(dateText);
-        if (!publishedAt) publishedAt = new Date();
+        // Use a hash of the URL or the link itself as kapId since we don't have the numerical ID
+        const kapId = 'gn_' + Buffer.from(link).toString('base64').substring(0, 15);
 
-        const kapId = href ? href.split('/').pop() : null;
-
-        items.push({
+        newsItems.push({
             symbol: cleanSymbol,
             kapId,
             title,
-            url: href ? (href.startsWith('http') ? href : `${KAP_BASE_URL}${href}`) : null,
+            url: link,
             publishedAt,
             companyName: cleanSymbol,
         });
-    });
-
-    // Eğer bildirim satırları bulunamadıysa alternatif selector dene
-    if (items.length === 0) {
-        $('tr').each((i, el) => {
-            if (i === 0) return; // başlık satırı
-            const $el = $(el);
-            const cells = $el.find('td');
-            if (cells.length < 2) return;
-
-            const dateText = $(cells[0]).text().trim();
-            const title = $(cells[1]).text().trim();
-            const href = $el.find('a').first().attr('href') || '';
-
-            if (!title || title.length < 5) return;
-
-            let publishedAt = parseTurkishDate(dateText);
-            if (!publishedAt) return;
-
-            const kapId = href ? href.split('/').pop() : null;
-
-            items.push({
-                symbol: cleanSymbol,
-                kapId,
-                title,
-                url: href ? (href.startsWith('http') ? href : `${KAP_BASE_URL}${href}`) : null,
-                publishedAt,
-                companyName: cleanSymbol,
-            });
-        });
     }
 
-    return items.slice(0, 10); // Son 10 bildirim
-}
-
-/**
- * Türkçe tarih string'ini Date'e çevirir.
- * Formatlar: "10.03.2026 14:30", "2026-03-10", "10 Mart 2026"
- */
-function parseTurkishDate(dateStr) {
-    if (!dateStr) return null;
-
-    const months = {
-        'Ocak': '01', 'Şubat': '02', 'Mart': '03', 'Nisan': '04',
-        'Mayıs': '05', 'Haziran': '06', 'Temmuz': '07', 'Ağustos': '08',
-        'Eylül': '09', 'Ekim': '10', 'Kasım': '11', 'Aralık': '12'
-    };
-
-    // Format: "10.03.2026 14:30"
-    const dotMatch = dateStr.match(/(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
-    if (dotMatch) {
-        const [, day, month, year, hour = '00', min = '00'] = dotMatch;
-        return new Date(`${year}-${month}-${day}T${hour}:${min}:00+03:00`);
-    }
-
-    // Format: "2026-03-10"
-    const isoMatch = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (isoMatch) {
-        return new Date(dateStr);
-    }
-
-    // Format: "10 Mart 2026"
-    for (const [trMonth, numMonth] of Object.entries(months)) {
-        if (dateStr.includes(trMonth)) {
-            const parts = dateStr.replace(trMonth, numMonth).match(/(\d+)\s+(\d+)\s+(\d+)/);
-            if (parts) {
-                const [, day, month, year] = parts;
-                return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
-            }
-        }
-    }
-
-    return null;
+    return newsItems.slice(0, 10); // Son 10 haber
 }
 
 /**

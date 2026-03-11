@@ -412,6 +412,7 @@ function App() {
                           const currentVal = marketInfo.price * item.amount;
                           const costVal = item.averageCost * item.amount;
                           const profit = currentVal - costVal;
+                          const profitPerc = costVal > 0 ? (profit / costVal) * 100 : 0;
                           return (
                             <tr key={item.symbol}>
                               <td>{item.symbol}</td>
@@ -419,7 +420,10 @@ function App() {
                               <td>₺{item.averageCost.toFixed(2)}</td>
                               <td>₺{(marketInfo.price || 0).toFixed(2)}</td>
                               <td className={profit >= 0 ? 'text-success' : 'text-error'}>
-                                ₺{profit.toFixed(2)}
+                                ₺{profit.toFixed(2)} 
+                                <span style={{fontSize: '0.85em', opacity: 0.8, marginLeft: '4px'}}>
+                                  ({profit >= 0 ? '+' : ''}{profitPerc.toFixed(2)}%)
+                                </span>
                               </td>
                               <td>
                                 <button className="btn-small" onClick={() => setSelectedStock(marketInfo)}>

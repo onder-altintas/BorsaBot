@@ -18,6 +18,9 @@ const PORT = process.env.PORT || 5000;
 let lastMarketFetchTime = 0;
 const MARKETS_CACHE_TTL = 20000; // 20 saniye
 let globalFetchError = null;
+// Global sinyal takip haritası: { "THYAO.IS_1h": "AL", "THYAO.IS_4h": "SAT", ... }
+const previousSignals = {};
+
 
 // MongoDB Bağlantısı
 mongoose.set('bufferCommands', false);
@@ -390,6 +393,45 @@ const fetchRealMarketData = async () => {
         if (updatedData && updatedData.some(d => d.price > 0)) {
             marketData = updatedData;
             globalFetchError = null;
+
+            // === GLOBAL SİNYAL GEÇMİŞİ KAYDI ===
+            // Bot aktif olsun ya da olmasın, tüm hisseler için sinyal değişimi kaydedilir
+            if (mongoose.connection.readyState === 1) {
+                const now = new Date();
+                const nowDate = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+                const nowTime = now.toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul' });
+                const TIMEFRAMES = ['1h', '4h', '1d'];
+
+                for (const stock of marketData) {
+                    if (!stock.indicators || stock.price === 0) continue;
+                    for (const tf of TIMEFRAMES) {
+                        const sigKey = `${stock.symbol}_${tf}`;
+                        const newSig = tf === '4h' ? stock.indicators.qqe_4h
+                                     : tf === '1d' ? stock.indicators.qqe_1d
+                                     : stock.indicators.qqe_1h;
+
+                        if ((newSig === 'AL' || newSig === 'SAT') && previousSignals[sigKey] !== newSig) {
+                            previousSignals[sigKey] = newSig;
+                            try {
+                                await SignalHistory.create({
+                                    symbol:    stock.symbol,
+                                    strategy:  'QQE',
+                                    timeframe: tf,
+                                    signal:    newSig,
+                                    price:     stock.price,
+                                    date:      nowDate,
+                                    time:      nowTime
+                                });
+                                console.log(`[SIGNAL HISTORY] ${stock.symbol} | QQE | ${tf} | ${newSig} | ${nowDate} ${nowTime}`);
+                            } catch (shErr) {
+                                console.error('[SignalHistory] Global kayıt hatası:', shErr.message);
+                            }
+                        }
+                    }
+                }
+            }
+            // === / GLOBAL SİNYAL GEÇMİŞİ KAYDI ===
+
         } else {
             if (!globalFetchError) globalFetchError = "FETCH_MARKET_CRASH: Bütün hisse çekimleri başarısız oldu veya dizi boş!";
             console.error(globalFetchError);
@@ -429,12 +471,8 @@ const fetchRealMarketData = async () => {
                                     userChanged = true;
                                     console.log(`[BOT SIGNAL CHANGED] User: ${user.username} | Symbol: ${symbol} | TF: ${timeframe} | New Signal: ${rec} | Timer Reset`);
 
-                                    // Sinyal geçmişine kaydet
-                                    try {
-                                        await SignalHistory.create({ symbol, signal: rec, timeframe, price: stock.price });
-                                    } catch (shErr) {
-                                        console.error('[SignalHistory] Kayıt hatası:', shErr.message);
-                                    }
+                                    // Sinyal geçmişine kaydet (bot aktif olan için ek kayıt — global kayıt zaten yapılıyor)
+                                    // Bu blok artık sadece bot loglama için bırakıldı
 
                                     // Eğer sinyal SAT ise ANINDA satış yap
                                     if (rec === 'SAT') {

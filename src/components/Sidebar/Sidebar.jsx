@@ -8,7 +8,8 @@ import {
   LogOut,
   RefreshCcw,
   LineChart,
-  Newspaper
+  Newspaper,
+  BarChart3
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -30,6 +31,7 @@ const Sidebar = ({ activeTab, setActiveTab, onLogout, onReset, isOpen, onClose }
     { id: 'bots', label: 'Bot', icon: Settings },
     { id: 'history', label: 'Geçmiş', icon: History },
     { id: 'news', label: 'Haberler', icon: Newspaper },
+    { id: 'report', label: 'Rapor', icon: BarChart3 },
   ];
 
   const handleReset = async () => {

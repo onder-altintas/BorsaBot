@@ -19,6 +19,7 @@ import History from './components/History/History';
 import Bots from './components/Bots/Bots';
 import Login from './components/Login/Login';
 import News from './components/News/News';
+import Report from './components/Report/Report';
 import { useEffect } from 'react';
 
 function App() {
@@ -454,6 +455,10 @@ function App() {
 
           {activeTab === 'news' && (
             <News portfolio={portfolio} />
+          )}
+
+          {activeTab === 'report' && (
+            <Report marketData={marketData} />
           )}
         </section>
       </main>

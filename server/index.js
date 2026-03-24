@@ -698,9 +698,77 @@ app.get('/api/signals/history', async (req, res) => {
         console.error('[API] /api/signals/history hatası:', err.message);
         res.status(500).json({ success: false, error: 'Sinyal geçmişi alınamadı.' });
     }
+});// Sinyal Performans API — AL→SAT çiftleri analizi
+app.get('/api/signals/performance', async (req, res) => {
+    try {
+        const COMMISSION_RATE = 0.0005; // %0.05 alım + %0.05 satım
+        const TIMEFRAMES = ['1h', '4h', '1d'];
+        const symbols = marketData.map(s => s.symbol);
+
+        // Tüm kayıtları çek (eskiden yeniye sıralı)
+        const allRecords = await SignalHistory.find({ symbol: { $in: symbols } })
+            .sort({ createdAt: 1 })
+            .lean();
+
+        const result = {};
+
+        for (const symbol of symbols) {
+            result[symbol] = {};
+            for (const tf of TIMEFRAMES) {
+                const records = allRecords.filter(r => r.symbol === symbol && r.timeframe === tf);
+                let success = 0, fail = 0, open = 0;
+                let i = 0;
+                while (i < records.length) {
+                    if (records[i].signal === 'AL') {
+                        const buyPrice = records[i].price;
+                        // Sonraki SAT'ı bul
+                        let j = i + 1;
+                        while (j < records.length && records[j].signal !== 'SAT') j++;
+                        if (j < records.length && records[j].signal === 'SAT') {
+                            const sellPrice = records[j].price;
+                            const totalCommission = buyPrice * COMMISSION_RATE + sellPrice * COMMISSION_RATE;
+                            if (sellPrice - buyPrice > totalCommission) {
+                                success++;
+                            } else {
+                                fail++;
+                            }
+                            i = j + 1;
+                        } else {
+                            // SAT henüz gelmemiş — açık pozisyon
+                            open++;
+                            i++;
+                        }
+                    } else {
+                        i++;
+                    }
+                }
+                const total = success + fail;
+                result[symbol][tf] = {
+                    success,
+                    fail,
+                    open,
+                    total,
+                    rate: total > 0 ? Math.round((success / total) * 100) : null
+                };
+            }
+
+            // En iyi strateji/saat
+            let best = null;
+            for (const tf of TIMEFRAMES) {
+                const d = result[symbol][tf];
+                if (d.rate !== null && (best === null || d.rate > best.rate)) {
+                    best = { timeframe: tf, rate: d.rate };
+                }
+            }
+            result[symbol].best = best;
+        }
+
+        res.json({ success: true, data: result });
+    } catch (err) {
+        console.error('[API] /api/signals/performance hatası:', err.message);
+        res.status(500).json({ success: false, error: 'Performans verisi alınamadı.' });
+    }
 });
-
-
 
 
 

@@ -32,8 +32,17 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                         ? botConfigs.get(stock.symbol)
                         : botConfigs?.[stock.symbol]) || { active: false, amount: 1 };
 
-                    let displaySignal = botConfig.lastSignal;
-                    if (displaySignal !== 'AL' && displaySignal !== 'SAT') displaySignal = 'BEKLİYOR';
+                    let displaySignal = 'BEKLİYOR';
+                    const tf = botConfig.timeframe || '1h';
+                    const stockData = marketData.find ? marketData.find(s => s.symbol === stock.symbol) : null;
+                    if (stockData) {
+                        const ind = stockData.indicators || {};
+                        const rawSig = tf === '4h' ? ind.qqe_4h : tf === '1d' ? ind.qqe_1d : ind.qqe_1h;
+                        if (rawSig === 'AL' || rawSig === 'SAT') displaySignal = rawSig;
+                    } else if (botConfig.lastSignal === 'AL' || botConfig.lastSignal === 'SAT') {
+                        displaySignal = botConfig.lastSignal;
+                    }
+
 
                     let timerDisplay = '--:--';
                     if (botConfig.signalStartTime && (displaySignal === 'AL' || displaySignal === 'SAT')) {
@@ -73,16 +82,26 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                                     </span>
                                 )}
                             </div>
-                            <div className="stock-bot-strategy">
+                            <div className="stock-bot-strategy" style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                                 <select
                                     className="bot-amount-input"
-                                    style={{ width: '90px', padding: '0.2rem' }}
+                                    style={{ width: '70px', padding: '0.2rem' }}
                                     value={botConfig.strategy || 'QQE'}
                                     onChange={(e) => onUpdateBot(stock.symbol, { strategy: e.target.value })}
                                     disabled={!botConfig.active}
                                 >
                                     <option value="QQE">QQE</option>
-                                    <option value="4COMBO">4-Combo</option>
+                                </select>
+                                <select
+                                    className="bot-amount-input"
+                                    style={{ width: '65px', padding: '0.2rem' }}
+                                    value={botConfig.timeframe || '1h'}
+                                    onChange={(e) => onUpdateBot(stock.symbol, { timeframe: e.target.value })}
+                                    disabled={!botConfig.active}
+                                >
+                                    <option value="1h">1S</option>
+                                    <option value="4h">4S</option>
+                                    <option value="1d">GÜN</option>
                                 </select>
                             </div>
                             <div className="stock-bot-status">

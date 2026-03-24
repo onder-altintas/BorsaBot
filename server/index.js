@@ -7,7 +7,9 @@ const YahooFinance = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinance();
 const User = require('./models/User');
 const KapNews = require('./models/KapNews');
+const SignalHistory = require('./models/SignalHistory');
 const { startKapPollingService } = require('./services/kapService');
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -193,241 +195,129 @@ const calculateEMA = (data, period) => {
     return ema;
 };
 
-// Gösterge hesaplama fonksiyonu
-const calculateIndicators = (history, currentPrice, symbol) => {
-    if (history.length < 2) return { sma5: 0, sma10: 0, ema7: 0, rsi: 50, recommendation: 'TUT', macd: { line: 0, signal: 0, hist: 0 }, bollinger: { upper: 0, middle: 0, lower: 0 }, fisher: { val1: 0, val2: 0 } };
+// QQE İndikatörü hesaplama fonksiyonu (tüm zaman dilimleri için ortak)
+const calculateQQESignal = (history) => {
+    if (history.length < 2) return 'TUT';
     const prices = history.map(h => h.price);
-    const volumes = history.map(h => h.volume || 0);
 
-    // EMA 7 hesaplama
+    const rsiLength = 14;
+    const ssf = 5;
+    const qqeFactor = 4.236;
+
+    const calcRMA = (data, period) => {
+        let arr = [data[0]];
+        const alpha = 1 / period;
+        for (let i = 1; i < data.length; i++) {
+            arr[i] = alpha * (data[i] ?? arr[i - 1]) + (1 - alpha) * arr[i - 1];
+        }
+        return arr;
+    };
+
+    const calcRSI = (data, period) => {
+        if (data.length < 2) return data.map(() => 50);
+        const gains = [0], losses = [0];
+        for (let i = 1; i < data.length; i++) {
+            const d = data[i] - data[i - 1];
+            gains.push(Math.max(0, d));
+            losses.push(Math.max(0, -d));
+        }
+        const ag = calcRMA(gains, period);
+        const al = calcRMA(losses, period);
+        return ag.map((g, i) => al[i] === 0 ? 100 : 100 - (100 / (1 + g / al[i])));
+    };
+
+    const calcEMAArr = (data, period) => {
+        let arr = [data[0]];
+        const alpha = 2 / (period + 1);
+        for (let i = 1; i < data.length; i++) {
+            arr[i] = alpha * (data[i] ?? arr[i - 1]) + (1 - alpha) * arr[i - 1];
+        }
+        return arr;
+    };
+
+    const QQEF = calcEMAArr(calcRSI(prices, rsiLength), ssf);
+    const TR = [0];
+    for (let i = 1; i < QQEF.length; i++) TR.push(Math.abs(QQEF[i] - QQEF[i - 1]));
+
+    const dar = calcEMAArr(calcEMAArr(TR, 27), 27).map(v => v * qqeFactor);
+    const QUP = QQEF.map((v, i) => v + dar[i]);
+    const QDN = QQEF.map((v, i) => v - dar[i]);
+    const QQES = [0];
+
+    for (let i = 1; i < QQEF.length; i++) {
+        const prev = QQES[i - 1] || 0;
+        let cur = prev;
+        if (QUP[i] < prev) cur = QUP[i];
+        else if (QQEF[i] > prev && QQEF[i - 1] < prev) cur = QDN[i];
+        else if (QDN[i] > prev) cur = QDN[i];
+        else if (QQEF[i] < prev && QQEF[i - 1] > prev) cur = QUP[i];
+        QQES.push(cur);
+    }
+
+    return QQEF[QQEF.length - 1] > QQES[QQES.length - 1] ? 'AL' : 'SAT';
+};
+
+// Gösterge hesaplama fonksiyonu (geriye dönük uyumluluk için)
+const calculateIndicators = (history, currentPrice, symbol) => {
+    if (history.length < 2) return { sma5: 0, sma10: 0, ema7: 0, rsi: 50, macd: { line: 0, signal: 0, hist: 0 }, bollinger: { upper: 0, middle: 0, lower: 0 }, qqe_1h: 'TUT', qqe_4h: 'TUT', qqe_1d: 'TUT' };
+    const prices = history.map(h => h.price);
+
     const ema7 = calculateEMA(prices, 7);
-
-    // SMA hesaplamaları
     const sma5 = prices.slice(-5).reduce((a, b) => a + b, 0) / Math.min(prices.length, 5);
     const sma10 = prices.slice(-10).reduce((a, b) => a + b, 0) / Math.min(prices.length, 10);
 
-    // RSI (14) hesaplama
-    let gains = 0;
-    let losses = 0;
+    let gains = 0, losses = 0;
     for (let i = Math.max(1, prices.length - 14); i < prices.length; i++) {
         const diff = prices[i] - prices[i - 1];
-        if (diff >= 0) gains += diff;
-        else losses -= diff;
+        if (diff >= 0) gains += diff; else losses -= diff;
     }
-    const rsi = losses === 0 ? 100 : 100 - (100 / (1 + (gains / losses)));
+    const rsi = losses === 0 ? 100 : 100 - (100 / (1 + gains / losses));
 
-    // MACD (12, 26, 9) hesaplama
     const ema12 = calculateEMA(prices, 12);
     const ema26 = calculateEMA(prices, 26);
     const macdLine = ema12 - ema26;
     const macdSignal = macdLine * 0.9;
     const macdHist = macdLine - macdSignal;
 
-    // Bollinger Bantları (20, 2) hesaplama
     const bbPeriod = Math.min(prices.length, 20);
     const bbMiddle = prices.slice(-bbPeriod).reduce((a, b) => a + b, 0) / bbPeriod;
     const variance = prices.slice(-bbPeriod).reduce((a, b) => a + Math.pow(b - bbMiddle, 2), 0) / bbPeriod;
     const stdDev = Math.sqrt(variance);
-    const bbUpper = bbMiddle + (stdDev * 2);
-    const bbLower = bbMiddle - (stdDev * 2);
 
-    // --- 4'LÜ KOMBO ÖZEL: FISHER TRANSFORM (9) ---
-    const fishLen = 9;
-    const fishPrices = history.slice(-fishLen).map(h => (h.high + h.low) / 2 || h.price);
-    const high_ = Math.max(...fishPrices);
-    const low_ = Math.min(...fishPrices);
-
-    const roundF = (val) => val > .99 ? .999 : val < -.99 ? -.999 : val;
-
-    const prevIndicator = marketData.find(s => s.symbol === symbol)?.indicators;
-    const prevFValue = prevIndicator?.fisherRaw || 0;
-    const prevFish1 = prevIndicator?.fisher?.val1 || 0;
-
-    const currentFValue = roundF(.66 * ((currentPrice - low_) / (Math.max(0.01, high_ - low_)) - .5) + .67 * prevFValue);
-    const fish1 = .5 * Math.log((1 + currentFValue) / (Math.max(0.001, 1 - currentFValue))) + .5 * prevFish1;
-    const fish2 = prevFish1;
-
-    // --- 4'LÜ KOMBO ÖZEL: HACİM MOMENTUM ---
-    const vEmaLen = 25;
-    let nRes1_array = [0];
-    let nRes2_array = [0];
-
-    for (let i = 1; i < prices.length; i++) {
-        let xROC = ((prices[i] - prices[i - 1]) / prices[i - 1]) * 100;
-        let prevRes1 = nRes1_array[i - 1];
-        let prevRes2 = nRes2_array[i - 1];
-
-        let curRes1 = (volumes[i] < volumes[i - 1]) ? (prevRes1 + xROC) : prevRes1;
-        let curRes2 = (volumes[i] > volumes[i - 1]) ? (prevRes2 + xROC) : prevRes2;
-
-        nRes1_array.push(curRes1);
-        nRes2_array.push(curRes2);
-    }
-
-    const sma = (arr, len) => {
-        if (arr.length === 0) return 0;
-        const period = Math.min(arr.length, len);
-        const slice = arr.slice(-period);
-        return slice.reduce((a, b) => a + b, 0) / period;
-    };
-
-    let nRes3 = nRes1_array[nRes1_array.length - 1] + nRes2_array[nRes2_array.length - 1];
-    let nResEMA3 = sma(nRes1_array, vEmaLen) + sma(nRes2_array, vEmaLen);
-    const isVolBullish = nRes3 > nResEMA3;
-
-    // --- SİNYAL MANTIĞI (Fisher + Volume Momentum) ---
-    let recommendation = 'TUT';
-
-    // KESİN AL KURALI: Fisher Yönü Yukarı (fish1 > fish2) VE Hacim Momentum Yeşil (isVolBullish)
-    if (fish1 > fish2 && isVolBullish) {
-        recommendation = 'AL';
-    }
-    // KESİN SAT KURALI: Fisher Yönü Aşağı (fish1 < fish2)
-    else if (fish1 < fish2) {
-        recommendation = 'SAT';
-    }
-
-    // GÜVENLİK FİLTRESİ: GÜÇLÜ ifadeleri tamamen kaldırıldı
-
-    // --- QQE İNDİKATÖRÜ EKLENTİSİ (CUSTOM PINE SCRIPT) ---
-    const rsiLength = 14;
-    const ssf = 5;
-    const qqeFactor = 4.236;
-
-    const calculateRMATV = (data, period) => {
-        let rmaArr = [data[0]];
-        let alpha = 1 / period;
-        for (let i = 1; i < data.length; i++) {
-            const val = data[i] !== undefined ? data[i] : rmaArr[i - 1];
-            rmaArr[i] = alpha * val + (1 - alpha) * rmaArr[i - 1];
-        }
-        return rmaArr;
-    };
-
-    const calculateRSITV = (data, period) => {
-        if (data.length < 2) return data.map(() => 50);
-        let gains = [0];
-        let losses = [0];
-
-        for (let i = 1; i < data.length; i++) {
-            const change = data[i] - data[i - 1];
-            gains.push(Math.max(0, change));
-            losses.push(Math.max(0, -change));
-        }
-
-        let avgGains = calculateRMATV(gains, period);
-        let avgLosses = calculateRMATV(losses, period);
-
-        let rsiArr = [];
-        for (let i = 0; i < data.length; i++) {
-            if (avgLosses[i] === 0) rsiArr.push(100);
-            else rsiArr.push(100 - (100 / (1 + (avgGains[i] / avgLosses[i]))));
-        }
-        return rsiArr;
-    };
-
-    const calculateEMAArray = (data, period) => {
-        let emaArr = [data[0]];
-        let alpha = 2 / (period + 1);
-        for (let i = 1; i < data.length; i++) {
-            const val = data[i] !== undefined ? data[i] : emaArr[i - 1];
-            emaArr[i] = alpha * val + (1 - alpha) * emaArr[i - 1];
-        }
-        return emaArr;
-    };
-
-    let rsiRaw = calculateRSITV(prices, rsiLength);
-    let RSII = calculateEMAArray(rsiRaw, ssf);
-    let QQEF = RSII;
-
-    let TR = [0];
-    for (let i = 1; i < RSII.length; i++) {
-        TR.push(Math.abs(RSII[i] - RSII[i - 1]));
-    }
-
-    // Pine Script'te dar = ema(ema(TR, 27), 27) * 4.236
-    let emaPeriod = 27; 
-    let MaAtrRsi = calculateEMAArray(TR, emaPeriod);
-    let dar_ema = calculateEMAArray(MaAtrRsi, emaPeriod);
-    let dar = dar_ema.map(v => v * qqeFactor);
-
-    let QUP = [];
-    let QDN = [];
-    let QQES = [];
-
-    for (let i = 0; i < QQEF.length; i++) {
-        QUP.push(QQEF[i] + dar[i]);
-        QDN.push(QQEF[i] - dar[i]);
-
-        if (i === 0) {
-            QQES.push(0);
-            continue;
-        }
-
-        let prevQQES = QQES[i - 1] || 0;
-        let prevQQEF = QQEF[i - 1] || 0;
-
-        let currentQQES = prevQQES;
-
-        if (QUP[i] < prevQQES) {
-            currentQQES = QUP[i];
-        } else if (QQEF[i] > prevQQES && prevQQEF < prevQQES) {
-            currentQQES = QDN[i];
-        } else if (QDN[i] > prevQQES) {
-            currentQQES = QDN[i];
-        } else if (QQEF[i] < prevQQES && prevQQEF > prevQQES) {
-            currentQQES = QUP[i];
-        }
-
-        QQES.push(currentQQES);
-    }
-
-    let currentQQEF = QQEF[QQEF.length - 1];
-    let prevQQEF_val = QQEF[QQEF.length - 2];
-    let currentQQES = QQES[QQES.length - 1];
-    let prevQQES_val = QQES[QQES.length - 2];
-
-    // QQE sinyali: QQEF > QQES → AL trendi, QQEF < QQES → SAT trendi (TUT üretmez)
-    // Pine Script'teki fill renklendirmesiyle aynı mantık: mavi = AL bölgesi, kırmızı = SAT bölgesi
-    let recommendationQQE = currentQQEF > currentQQES ? 'AL' : 'SAT';
+    const qqe_1h = calculateQQESignal(history);
 
     return {
         sma5: parseFloat(sma5.toFixed(2)),
         sma10: parseFloat(sma10.toFixed(2)),
         ema7: parseFloat(ema7.toFixed(2)),
         rsi: parseFloat(rsi.toFixed(2)),
-        macd: {
-            line: parseFloat(macdLine.toFixed(2)),
-            signal: parseFloat(macdSignal.toFixed(2)),
-            hist: parseFloat(macdHist.toFixed(2))
-        },
-        bollinger: {
-            upper: parseFloat(bbUpper.toFixed(2)),
-            middle: parseFloat(bbMiddle.toFixed(2)),
-            lower: parseFloat(bbLower.toFixed(2))
-        },
-        fisher: {
-            val1: parseFloat(fish1.toFixed(3)),
-            val2: parseFloat(fish2.toFixed(3))
-        },
-        fisherRaw: currentFValue,
-        recommendation,
-        recommendationQQE
+        macd: { line: parseFloat(macdLine.toFixed(2)), signal: parseFloat(macdSignal.toFixed(2)), hist: parseFloat(macdHist.toFixed(2)) },
+        bollinger: { upper: parseFloat((bbMiddle + stdDev * 2).toFixed(2)), middle: parseFloat(bbMiddle.toFixed(2)), lower: parseFloat((bbMiddle - stdDev * 2).toFixed(2)) },
+        qqe_1h,
+        qqe_4h: 'TUT', // fetchRealMarketData tarafından doldurulur
+        qqe_1d: 'TUT'  // fetchRealMarketData tarafından doldurulur
     };
 };
 
 // Gerçek piyasa verilerini Yahoo Finance üzerinden çekme fonksiyonu
 const fetchRealMarketData = async () => {
     try {
-
-
         const now = new Date();
         const symbols = marketData.map(s => s.symbol);
 
-        // Güncel fiyatları çek
         console.log(`FETCH_MARKET: Yahoo Finance'den ${symbols.length} sembol cekiliyor...`);
         const quotes = await yahooFinance.quote(symbols);
         console.log(`FETCH_MARKET: ${quotes.length} hisse fiyatı basariyla cekildi.`);
+
+        const mapHistory = (quotes) => quotes
+            .filter(h => h.close !== null && h.close !== undefined)
+            .map(h => ({
+                time: h.date.toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul' }),
+                price: h.close,
+                volume: h.volume || 0,
+                high: h.high || h.close,
+                low: h.low || h.close
+            }));
 
         const fetchPromises = marketData.map(async (stock) => {
             try {
@@ -439,30 +329,45 @@ const fetchRealMarketData = async () => {
                 const change = newPrice - prevClose;
                 const changePercent = (change / prevClose) * 100;
 
-                // Saatlik veri çekme mantığı (İndikatörler için)
-                const startDate = new Date();
-                startDate.setDate(startDate.getDate() - 7); // Son 1 haftalık veri indikatörler için yeterli
+                // 1 Saatlik veri (son 7 gün) — temel göstergeler + qqe_1h
+                const start1h = new Date();
+                start1h.setDate(start1h.getDate() - 7);
+                const chart1h = await yahooFinance.chart(stock.symbol, { period1: start1h, interval: '1h' });
+                const history1h = mapHistory(chart1h.quotes).slice(-60);
 
-                const chartData = await yahooFinance.chart(stock.symbol, {
-                    period1: startDate,
-                    interval: '1h'
-                });
+                // 4 Saatlik veri (son 60 günlük 1h mumları 4'erli grupla)
+                const start4h = new Date();
+                start4h.setDate(start4h.getDate() - 60);
+                const chart4h = await yahooFinance.chart(stock.symbol, { period1: start4h, interval: '1h' });
+                const raw4h = mapHistory(chart4h.quotes);
+                const history4h = [];
+                for (let i = 0; i < raw4h.length; i += 4) {
+                    const group = raw4h.slice(i, i + 4);
+                    if (group.length === 0) continue;
+                    history4h.push({
+                        time: group[group.length - 1].time,
+                        price: group[group.length - 1].price,
+                        volume: group.reduce((s, x) => s + x.volume, 0),
+                        high: Math.max(...group.map(x => x.high)),
+                        low: Math.min(...group.map(x => x.low))
+                    });
+                }
 
-                let history = chartData.quotes
-                    .filter(h => h.close !== null && h.close !== undefined)
-                    .map(h => ({
-                        time: h.date.toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul' }),
-                        price: h.close,
-                        volume: h.volume || 0,
-                        high: h.high || h.close,
-                        low: h.low || h.close
-                    }));
+                // Günlük veri (son 180 gün)
+                const start1d = new Date();
+                start1d.setDate(start1d.getDate() - 180);
+                const chart1d = await yahooFinance.chart(stock.symbol, { period1: start1d, interval: '1d' });
+                const history1d = mapHistory(chart1d.quotes).slice(-100);
 
-                // Anlık fiyat GEÇMİŞ SAATLİK MUMLARA EKLENMİYOR
-                // Sinyaller dalgalanmasın diye sadece kapanmış saatlik mumları tutuyoruz.
-                history = history.slice(-60);
+                // QQE Sinyalleri: her zaman dilimi için ayrı hesapla
+                const qqe_1h = calculateQQESignal(history1h);
+                const qqe_4h = calculateQQESignal(history4h);
+                const qqe_1d = calculateQQESignal(history1d);
 
-                const indicators = calculateIndicators(history, newPrice, stock.symbol);
+                const indicators = calculateIndicators(history1h, newPrice, stock.symbol);
+                indicators.qqe_1h = qqe_1h;
+                indicators.qqe_4h = qqe_4h;
+                indicators.qqe_1d = qqe_1d;
 
                 return {
                     ...stock,
@@ -470,19 +375,18 @@ const fetchRealMarketData = async () => {
                     dayStartPrice: prevClose,
                     change: parseFloat(change.toFixed(2)),
                     changePercent: parseFloat(changePercent.toFixed(2)),
-                    priceHistory: history,
+                    priceHistory: history1h,
                     indicators
                 };
             } catch (err) {
                 console.error(`${stock.symbol} verisi işlenirken hata (detay):`, err.stack);
                 globalFetchError = `[Hata: ${stock.symbol}] ${err.stack || err.message}`;
-                return stock; // Eski 0'lı stock kopyası dönersek API sıfır olarak güncellenir. Ancak mecburen dönüyoruz.
+                return stock;
             }
         });
 
         const updatedData = await Promise.all(fetchPromises);
 
-        // Sadece başarılı fetch'leri (fiyatı > 0 olanları) tespit edersek global marketData'yı ezelim.
         if (updatedData && updatedData.some(d => d.price > 0)) {
             marketData = updatedData;
             globalFetchError = null;
@@ -505,12 +409,15 @@ const fetchRealMarketData = async () => {
                             const stock = marketData.find(s => s.symbol === symbol);
                             if (!stock) continue;
 
-                            const strategyType = config.strategy || 'QQE';
+                            // Zaman dilimine göre sinyal seç
+                            const timeframe = config.timeframe || '1h';
                             let rec = 'TUT';
-                            if (strategyType === 'QQE') {
-                                rec = stock.indicators?.recommendationQQE || 'TUT';
+                            if (timeframe === '4h') {
+                                rec = stock.indicators?.qqe_4h || 'TUT';
+                            } else if (timeframe === '1d') {
+                                rec = stock.indicators?.qqe_1d || 'TUT';
                             } else {
-                                rec = stock.indicators?.recommendation || 'TUT';
+                                rec = stock.indicators?.qqe_1h || 'TUT';
                             }
 
                             // Sinyal değişimi algılama
@@ -520,13 +427,20 @@ const fetchRealMarketData = async () => {
                                     config.signalStartTime = Date.now();
                                     config.lastAction = 'NONE';
                                     userChanged = true;
-                                    console.log(`[BOT SIGNAL CHANGED] User: ${user.username} | Symbol: ${symbol} | New Signal: ${rec} | Timer Reset`);
+                                    console.log(`[BOT SIGNAL CHANGED] User: ${user.username} | Symbol: ${symbol} | TF: ${timeframe} | New Signal: ${rec} | Timer Reset`);
+
+                                    // Sinyal geçmişine kaydet
+                                    try {
+                                        await SignalHistory.create({ symbol, signal: rec, timeframe, price: stock.price });
+                                    } catch (shErr) {
+                                        console.error('[SignalHistory] Kayıt hatası:', shErr.message);
+                                    }
 
                                     // Eğer sinyal SAT ise ANINDA satış yap
                                     if (rec === 'SAT') {
                                         const stockInPortfolio = user.portfolio.find(p => p.symbol === stock.symbol);
                                         if (stockInPortfolio && stockInPortfolio.amount > 0) {
-                                            const sellAmount = stockInPortfolio.amount; // TÜMÜNÜ SAT
+                                            const sellAmount = stockInPortfolio.amount;
                                             const stockRevenue = stock.price * sellAmount;
                                             const commission = stockRevenue * COMMISSION_RATE;
                                             const netRevenue = stockRevenue - commission;
@@ -534,7 +448,6 @@ const fetchRealMarketData = async () => {
                                             user.balance += netRevenue;
                                             user.portfolio = user.portfolio.filter(p => p.symbol !== stock.symbol);
                                             user.markModified('portfolio');
-
                                             user.history = [{
                                                 id: Date.now() + Math.random(),
                                                 type: 'SATIM',
@@ -545,7 +458,7 @@ const fetchRealMarketData = async () => {
                                                 total: netRevenue,
                                                 date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
                                                 isAuto: true,
-                                                reason: strategyType + ' Sinyali (Anında)'
+                                                reason: 'QQE(' + timeframe + ') Sinyali (Anında)'
                                             }, ...user.history];
 
                                             config.lastAction = 'SELL';
@@ -566,7 +479,6 @@ const fetchRealMarketData = async () => {
 
                             // 1 Saatlik AL Sinyali Bekleme ve İşleme
                             if (config.lastSignal === 'AL' && config.lastAction !== 'BUY') {
-                                // signalStartTime eksikse şimdi başlat (eski kayıtlar için güvenlik)
                                 if (!config.signalStartTime) {
                                     config.signalStartTime = Date.now();
                                     userChanged = true;
@@ -574,7 +486,7 @@ const fetchRealMarketData = async () => {
                                 }
                                 const waitTimeMs = 60 * 60 * 1000; // 1 saat
                                 const elapsed = Date.now() - config.signalStartTime;
-                                console.log(`[BOT TIMER] ${user.username} | ${symbol} | Gecen: ${Math.round(elapsed / 60000)}dk / 60dk`);
+                                console.log(`[BOT TIMER] ${user.username} | ${symbol} | TF: ${timeframe} | Gecen: ${Math.round(elapsed / 60000)}dk / 60dk`);
 
                                 if (elapsed >= waitTimeMs) {
                                     const stockCost = stock.price * (config.amount || 1);
@@ -601,13 +513,12 @@ const fetchRealMarketData = async () => {
                                             total: totalCost,
                                             date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
                                             isAuto: true,
-                                            reason: strategyType + ' Sinyali (1 Saat Gecikmeli)'
+                                            reason: 'QQE(' + timeframe + ') Sinyali (1 Saat Gecikmeli)'
                                         }, ...user.history];
 
-                                        config.lastAction = 'BUY'; // Başarıyla alım yapıldığını kaydet
+                                        config.lastAction = 'BUY';
                                         userChanged = true;
                                     } else {
-                                        // Yetersiz bakiye uyarısı (spam yapmamak için lastAction'ı BUY_FAILED veya BUY yapalım)
                                         user.history = [{
                                             id: Date.now() + Math.random(),
                                             type: 'SİSTEM',
@@ -620,14 +531,13 @@ const fetchRealMarketData = async () => {
                                             isAuto: true,
                                             reason: `Yetersiz Bakiye! ${config.amount || 1} adet için ${totalCost.toFixed(2)} TL gerekli.`
                                         }, ...user.history];
-                                        config.lastAction = 'BUY'; // Tekrar denemesin
+                                        config.lastAction = 'BUY';
                                         userChanged = true;
                                     }
                                 }
                             }
 
-                            // Stop-Loss ve Take-Profit Kontrolleri (İkincil tetikleyiciler)
-                            // (Sadece elde hisse varsa ve bot açıksa çalışır)
+                            // Stop-Loss ve Take-Profit Kontrolleri
                             const stockInPortfolioSLTP = user.portfolio.find(p => p.symbol === stock.symbol);
                             if (stockInPortfolioSLTP && config.lastAction !== 'SELL') {
                                 const profitPercent = ((stock.price - stockInPortfolioSLTP.averageCost) / stockInPortfolioSLTP.averageCost) * 100;
@@ -665,9 +575,9 @@ const fetchRealMarketData = async () => {
                     }
 
                     if (userChanged) {
-                        user.markModified('botConfigs'); // Map ve obje değişiklikleri için kritik
-                        user.markModified('portfolio');  // Güvenlik amaçlı her seferinde portföyü modifiye işaretle
-                        user.markModified('history');    // Güvenlik amaçlı her seferinde history'yi modifiye işaretle
+                        user.markModified('botConfigs');
+                        user.markModified('portfolio');
+                        user.markModified('history');
                     }
                 }
 
@@ -728,11 +638,34 @@ setInterval(fetchRealMarketData, 20000);
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.2',
+    version: '5.3',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError
 }));
+
+// Sinyal Geçmişi API
+app.get('/api/signals/history', async (req, res) => {
+    try {
+        const { symbol, timeframe, limit = 100 } = req.query;
+        const query = {};
+        if (symbol) query.symbol = symbol;
+        if (timeframe) query.timeframe = timeframe;
+        const records = await SignalHistory.find(query)
+            .sort({ date: -1 })
+            .limit(parseInt(limit))
+            .lean();
+        res.json({ success: true, data: records, total: records.length });
+    } catch (err) {
+        console.error('[API] /api/signals/history hatası:', err.message);
+        res.status(500).json({ success: false, error: 'Sinyal geçmişi alınamadı.' });
+    }
+});
+
+
+
+
+
 
 app.get('/api/user/data', async (req, res) => {
     const username = req.headers['x-user']?.toLowerCase();

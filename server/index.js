@@ -1143,10 +1143,63 @@ app.use((req, res, next) => {
     res.sendFile(path.join(__dirname, '../dist', 'index.html'));
 });
 
+/**
+ * Veritabanındaki en son sinyalleri yükleyerek previousSignals nesnesini ilkleştirir.
+ * Bu sayede sunucu yeniden başladığında mükerrer kayıt oluşması önlenir.
+ */
+const initializePreviousSignals = async () => {
+    try {
+        console.log('🔄 Sinyal geçmişi veritabanından yükleniyor ve temizleniyor...');
+        const TIMEFRAMES = ['1h', '4h', '1d'];
+        const symbols = BIST_STOCK_SYMBOLS.map(s => s.symbol);
+
+        // 1. Mükerrer kayıtları temizle
+        const allRecords = await SignalHistory.find({})
+            .sort({ symbol: 1, timeframe: 1, createdAt: 1 })
+            .lean();
+
+        const idsToDelete = [];
+        let lastRecord = null;
+        for (const record of allRecords) {
+            if (lastRecord && 
+                lastRecord.symbol === record.symbol && 
+                lastRecord.timeframe === record.timeframe && 
+                lastRecord.signal === record.signal) {
+                idsToDelete.push(record._id);
+            } else {
+                lastRecord = record;
+            }
+        }
+
+        if (idsToDelete.length > 0) {
+            const delResult = await SignalHistory.deleteMany({ _id: { $in: idsToDelete } });
+            console.log(`🧹 ${delResult.deletedCount} adet mükerrer kayıt temizlendi.`);
+        }
+
+        // 2. Son sinyalleri belleğe yükle
+        for (const symbol of symbols) {
+            for (const tf of TIMEFRAMES) {
+                const lastSignal = await SignalHistory.findOne({ symbol, timeframe: tf })
+                    .sort({ createdAt: -1 })
+                    .lean();
+
+                if (lastSignal) {
+                    previousSignals[`${symbol}_${tf}`] = lastSignal.signal;
+                }
+            }
+        }
+        console.log(`✅ ${Object.keys(previousSignals).length} adet son sinyal durumu başarıyla yüklendi.`);
+    } catch (err) {
+        console.error('❌ Sinyal geçmişi yüklenirken/temizlenirken hata:', err.message);
+    }
+};
+
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Sunucu ${PORT} portunda çalışıyor`);
     try {
         await connectDB();
+        // Sinyal durumlarını yükle
+        await initializePreviousSignals();
         // KAP bildirim takip servisini başlat
         startKapPollingService();
     } catch (e) {

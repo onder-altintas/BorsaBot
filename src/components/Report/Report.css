@@ -32,6 +32,33 @@
     color: #64748b;
 }
 
+.report-tabs {
+    display: flex;
+    background: #0f172a;
+    padding: 0.25rem;
+    border-radius: 8px;
+    border: 1px solid #1e293b;
+    margin-right: auto;
+}
+
+.report-tab-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    padding: 0.35rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.report-tab-btn.active {
+    background: #1e293b;
+    color: #e2e8f0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
 .report-refresh-btn {
     background: #1e293b;
     border: 1px solid #334155;
@@ -203,6 +230,79 @@
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* Sinyal Geçmişi Detay Görünümü */
+.history-table-container {
+    margin-top: 0.5rem;
+}
+
+.history-filters {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.history-input, .history-select {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #f8fafc;
+    padding: 0.45rem 0.75rem;
+    border-radius: 8px;
+    outline: none;
+    font-size: 0.85rem;
+}
+
+.history-input:focus, .history-select:focus {
+    border-color: #60a5fa;
+}
+
+.history-total-info {
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+
+.history-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+    padding: 1rem;
+}
+
+.page-btn {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #f8fafc;
+    padding: 0.4rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.page-btn:not(:disabled):hover {
+    background: #334155;
+}
+
+.page-info {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #94a3b8;
 }
 
 /* Bilgi kutusu */

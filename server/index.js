@@ -682,23 +682,42 @@ app.get('/api/market', (req, res) => res.json({
     error: globalFetchError
 }));
 
-// Sinyal Geçmişi API
+// Sinyal Geçmişi API - Sayfalama ve Filtreleme
 app.get('/api/signals/history', async (req, res) => {
     try {
-        const { symbol, timeframe, limit = 100 } = req.query;
+        const { symbol, timeframe, page = 1, limit = 50 } = req.query;
         const query = {};
-        if (symbol) query.symbol = symbol;
+        if (symbol) {
+            // "THYAO" araması hem "THYAO" hem de "THYAO.IS" için çalışsın
+            query.symbol = { $regex: symbol, $options: 'i' };
+        }
         if (timeframe) query.timeframe = timeframe;
+
+        const p = parseInt(page);
+        const l = parseInt(limit);
+        const skip = (p - 1) * l;
+
+        const total = await SignalHistory.countDocuments(query);
         const records = await SignalHistory.find(query)
-            .sort({ date: -1 })
-            .limit(parseInt(limit))
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(l)
             .lean();
-        res.json({ success: true, data: records, total: records.length });
+
+        res.json({ 
+            success: true, 
+            data: records, 
+            total, 
+            page: p, 
+            limit: l,
+            totalPages: Math.ceil(total / l)
+        });
     } catch (err) {
         console.error('[API] /api/signals/history hatası:', err.message);
         res.status(500).json({ success: false, error: 'Sinyal geçmişi alınamadı.' });
     }
-});// Sinyal Performans API — AL→SAT çiftleri analizi
+});
+// Sinyal Performans API — AL→SAT çiftleri analizi
 app.get('/api/signals/performance', async (req, res) => {
     try {
         const COMMISSION_RATE = 0.0005; // %0.05 alım + %0.05 satım

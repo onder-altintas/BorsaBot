@@ -198,66 +198,95 @@ const calculateEMA = (data, period) => {
     return ema;
 };
 
-// QQE İndikatörü hesaplama fonksiyonu (tüm zaman dilimleri için ortak)
+// QQE İndikatörü hesaplama fonksiyonu — Pine Script QQE ile birebir eşdeğer
+// Pine: length=15, SSF=14, wwalpha=1/length, WWMA=RMA(TR,length), ATRRSI=RMA(WWMA,length)
+// Sinyal: crossover(QQEF,QQES)→AL | crossunder(QQEF,QQES)→SAT | diğer→TUT
 const calculateQQESignal = (history) => {
-    if (history.length < 2) return 'TUT';
+    if (history.length < 3) return 'TUT';
     const prices = history.map(h => h.price);
 
-    const rsiLength = 14;
-    const ssf = 5;
+    // Pine Script parametreleri
+    const length = 15;   // RSI Length
+    const SSF    = 14;   // SF (RSI Smoothing Factor — EMA periyodu)
     const qqeFactor = 4.236;
+    const wwalpha = 1 / length;  // Wilder smoothing alpha
 
-    const calcRMA = (data, period) => {
-        let arr = [data[0]];
-        const alpha = 1 / period;
+    // RMA (Wilder's Moving Average) — Pine: wwalpha * x + (1-wwalpha) * prev
+    const calcRMA = (data, alpha) => {
+        const arr = [data[0] ?? 0];
         for (let i = 1; i < data.length; i++) {
             arr[i] = alpha * (data[i] ?? arr[i - 1]) + (1 - alpha) * arr[i - 1];
         }
         return arr;
     };
 
+    // EMA — Pine: ta.ema(src, period)
+    const calcEMA = (data, period) => {
+        const alpha = 2 / (period + 1);
+        const arr = [data[0] ?? 0];
+        for (let i = 1; i < data.length; i++) {
+            arr[i] = alpha * (data[i] ?? arr[i - 1]) + (1 - alpha) * arr[i - 1];
+        }
+        return arr;
+    };
+
+    // RSI — Pine: ta.rsi(src, length) — Wilder tabanlı
     const calcRSI = (data, period) => {
         if (data.length < 2) return data.map(() => 50);
         const gains = [0], losses = [0];
         for (let i = 1; i < data.length; i++) {
             const d = data[i] - data[i - 1];
-            gains.push(Math.max(0, d));
-            losses.push(Math.max(0, -d));
+            gains.push(d > 0 ? d : 0);
+            losses.push(d < 0 ? -d : 0);
         }
-        const ag = calcRMA(gains, period);
-        const al = calcRMA(losses, period);
+        const ag = calcRMA(gains, 1 / period);
+        const al = calcRMA(losses, 1 / period);
         return ag.map((g, i) => al[i] === 0 ? 100 : 100 - (100 / (1 + g / al[i])));
     };
 
-    const calcEMAArr = (data, period) => {
-        let arr = [data[0]];
-        const alpha = 2 / (period + 1);
-        for (let i = 1; i < data.length; i++) {
-            arr[i] = alpha * (data[i] ?? arr[i - 1]) + (1 - alpha) * arr[i - 1];
-        }
-        return arr;
-    };
+    // QQEF = ta.ema(ta.rsi(src, length), SSF)
+    const QQEF = calcEMA(calcRSI(prices, length), SSF);
 
-    const QQEF = calcEMAArr(calcRSI(prices, rsiLength), ssf);
+    // TR = abs(QQEF - QQEF[1])
     const TR = [0];
     for (let i = 1; i < QQEF.length; i++) TR.push(Math.abs(QQEF[i] - QQEF[i - 1]));
 
-    const dar = calcEMAArr(calcEMAArr(TR, 27), 27).map(v => v * qqeFactor);
-    const QUP = QQEF.map((v, i) => v + dar[i]);
-    const QDN = QQEF.map((v, i) => v - dar[i]);
-    const QQES = [0];
+    // WWMA  = RMA(TR,  length)   — Pine: wwalpha*TR  + (1-wwalpha)*WWMA[1]
+    // ATRRSI= RMA(WWMA,length)  — Pine: wwalpha*WWMA + (1-wwalpha)*ATRRSI[1]
+    const WWMA   = calcRMA(TR,    wwalpha);
+    const ATRRSI = calcRMA(WWMA,  wwalpha);
 
+    const QUP = QQEF.map((v, i) => v + ATRRSI[i] * qqeFactor);
+    const QDN = QQEF.map((v, i) => v - ATRRSI[i] * qqeFactor);
+
+    // QQES trailing stop — Pine Script mantığı ile birebir:
+    // QUP < QQES[1]                                   → QUP
+    // QQEF > QQES[1] and QQEF[1] < QQES[1] (crossover)→ QDN
+    // QDN > QQES[1]                                   → QDN
+    // QQEF < QQES[1] and QQEF[1] > QQES[1] (crossunder)→ QUP
+    // else                                             → QQES[1]
+    const QQES = [0];
     for (let i = 1; i < QQEF.length; i++) {
-        const prev = QQES[i - 1] || 0;
-        let cur = prev;
-        if (QUP[i] < prev) cur = QUP[i];
-        else if (QQEF[i] > prev && QQEF[i - 1] < prev) cur = QDN[i];
-        else if (QDN[i] > prev) cur = QDN[i];
-        else if (QQEF[i] < prev && QQEF[i - 1] > prev) cur = QUP[i];
+        const prev = QQES[i - 1];
+        let cur;
+        if      (QUP[i] < prev)                                  cur = QUP[i];
+        else if (QQEF[i] > prev && QQEF[i - 1] < prev)          cur = QDN[i];
+        else if (QDN[i] > prev)                                   cur = QDN[i];
+        else if (QQEF[i] < prev && QQEF[i - 1] > prev)          cur = QUP[i];
+        else                                                       cur = prev;
         QQES.push(cur);
     }
 
-    return QQEF[QQEF.length - 1] > QQES[QQES.length - 1] ? 'AL' : 'SAT';
+    // Sinyal: Sadece CROSSOVER / CROSSUNDER anında AL veya SAT
+    // Pine: buySignalr = ta.crossover(QQEF, QQES)  → QQEF[i-1]<=QQES[i-1] ve QQEF[i]>QQES[i]
+    //       sellSignallr= ta.crossunder(QQEF, QQES) → QQEF[i-1]>=QQES[i-1] ve QQEF[i]<QQES[i]
+    const n = QQEF.length - 1;
+    const crossover  = QQEF[n - 1] <= QQES[n - 1] && QQEF[n] > QQES[n];
+    const crossunder = QQEF[n - 1] >= QQES[n - 1] && QQEF[n] < QQES[n];
+
+    if (crossover)  return 'AL';
+    if (crossunder) return 'SAT';
+    return 'TUT';
 };
 
 // Gösterge hesaplama fonksiyonu (geriye dönük uyumluluk için)
@@ -338,23 +367,42 @@ const fetchRealMarketData = async () => {
                 const chart1h = await yahooFinance.chart(stock.symbol, { period1: start1h, interval: '1h' });
                 const history1h = mapHistory(chart1h.quotes).slice(-60);
 
-                // 4 Saatlik veri (son 60 günlük 1h mumları 4'erli grupla)
+                // 4 Saatlik veri — 1h mumları gerçek 4h bloklarına (00,04,08,12,16,20) göre grupla
+                // Yahoo Finance'de native 4h aralığı olmadığından 1h verisi manuel gruplanıyor
                 const start4h = new Date();
-                start4h.setDate(start4h.getDate() - 60);
+                start4h.setDate(start4h.getDate() - 90); // 90 gün → yeterli 4h mum sayısı
                 const chart4h = await yahooFinance.chart(stock.symbol, { period1: start4h, interval: '1h' });
                 const raw4h = mapHistory(chart4h.quotes);
-                const history4h = [];
-                for (let i = 0; i < raw4h.length; i += 4) {
-                    const group = raw4h.slice(i, i + 4);
-                    if (group.length === 0) continue;
-                    history4h.push({
-                        time: group[group.length - 1].time,
-                        price: group[group.length - 1].price,
-                        volume: group.reduce((s, x) => s + x.volume, 0),
-                        high: Math.max(...group.map(x => x.high)),
-                        low: Math.min(...group.map(x => x.low))
-                    });
+
+                // Her 1h mumu hangi 4h bloğuna ait olduğunu hesapla (UTC saat / 4)
+                const blocks4h = {};
+                for (const candle of raw4h) {
+                    // date bilgisi yoksa time string'den saati al (varsayım: UTC+3)
+                    // chart quote'lardan orijinal tarih bilgisini kullanmak için raw quotes'u paralel tut
+                    const idx = raw4h.indexOf(candle);
+                    const originalQuote = chart4h.quotes[idx];
+                    if (!originalQuote || !originalQuote.date) continue;
+                    const d = new Date(originalQuote.date);
+                    // 4h blok anahtarı: YYYY-MM-DD_HH (HH=00,04,08,12,16,20)
+                    const blockHour = Math.floor(d.getUTCHours() / 4) * 4;
+                    const blockKey = `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}_${blockHour}`;
+                    if (!blocks4h[blockKey]) blocks4h[blockKey] = [];
+                    blocks4h[blockKey].push({ ...candle, _date: d });
                 }
+
+                const history4h = Object.keys(blocks4h)
+                    .sort()
+                    .map(key => {
+                        const group = blocks4h[key];
+                        return {
+                            time: group[group.length - 1].time,
+                            price: group[group.length - 1].price,       // kapanış fiyatı
+                            volume: group.reduce((s, x) => s + x.volume, 0),
+                            high: Math.max(...group.map(x => x.high)),
+                            low: Math.min(...group.map(x => x.low))
+                        };
+                    })
+                    .slice(-150); // son 150 mum yeterli
 
                 // Günlük veri (son 180 gün)
                 const start1d = new Date();
@@ -414,6 +462,7 @@ const fetchRealMarketData = async () => {
                             // Veritabanındaki en son kaydı kontrol et (Kesin Mükerrer Önleme)
                             const lastRecordInDb = await SignalHistory.findOne({ 
                                 symbol: stock.symbol, 
+                                strategy: 'QQE',
                                 timeframe: tf 
                             }).sort({ createdAt: -1 }).lean();
 

@@ -410,21 +410,29 @@ const fetchRealMarketData = async () => {
                                      : tf === '1d' ? stock.indicators.qqe_1d
                                      : stock.indicators.qqe_1h;
 
-                        if ((newSig === 'AL' || newSig === 'SAT') && previousSignals[sigKey] !== newSig) {
-                            previousSignals[sigKey] = newSig;
-                            try {
-                                await SignalHistory.create({
-                                    symbol:    stock.symbol,
-                                    strategy:  'QQE',
-                                    timeframe: tf,
-                                    signal:    newSig,
-                                    price:     stock.price,
-                                    date:      nowDate,
-                                    time:      nowTime
-                                });
-                                console.log(`[SIGNAL HISTORY] ${stock.symbol} | QQE | ${tf} | ${newSig} | ${nowDate} ${nowTime}`);
-                            } catch (shErr) {
-                                console.error('[SignalHistory] Global kayıt hatası:', shErr.message);
+                        if (newSig === 'AL' || newSig === 'SAT') {
+                            // Veritabanındaki en son kaydı kontrol et (Kesin Mükerrer Önleme)
+                            const lastRecordInDb = await SignalHistory.findOne({ 
+                                symbol: stock.symbol, 
+                                timeframe: tf 
+                            }).sort({ createdAt: -1 }).lean();
+
+                            if (!lastRecordInDb || lastRecordInDb.signal !== newSig) {
+                                previousSignals[sigKey] = newSig;
+                                try {
+                                    await SignalHistory.create({
+                                        symbol:    stock.symbol,
+                                        strategy:  'QQE',
+                                        timeframe: tf,
+                                        signal:    newSig,
+                                        price:     stock.price,
+                                        date:      nowDate,
+                                        time:      nowTime
+                                    });
+                                    console.log(`[SIGNAL HISTORY] ${stock.symbol} | QQE | ${tf} | ${newSig} | ${nowDate} ${nowTime} (Kaydedildi)`);
+                                } catch (shErr) {
+                                    console.error('[SignalHistory] Global kayıt hatası:', shErr.message);
+                                }
                             }
                         }
                     }

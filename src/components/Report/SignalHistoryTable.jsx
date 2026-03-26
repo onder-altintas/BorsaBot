@@ -56,7 +56,10 @@ const SignalHistoryTable = () => {
                         onChange={(e) => { setTfFilter(e.target.value); setPage(1); }}
                         className="history-select"
                     >
-                        <option value="1d">Günlük (GÜN)</option>
+                        <option value="">Tüm Zaman Dilimleri</option>
+                        <option value="1h">1 Saat</option>
+                        <option value="4h">4 Saat</option>
+                        <option value="1d">Günlük</option>
                     </select>
                     <select 
                         value={stratFilter} 

@@ -989,8 +989,29 @@ const fetchRealMarketData = async () => {
 setInterval(fetchRealMarketData, 20000);
 
 // API Endpoints
+// Sinyal geçmişini temizle (Şifreli: 6019)
+app.post('/api/signals/clear', async (req, res) => {
+    try {
+        const { password } = req.body;
+        if (password !== '6019') {
+            return res.status(401).json({ success: false, error: 'Hatalı şifre!' });
+        }
+
+        const result = await SignalHistory.deleteMany({});
+        console.log(`🧹 Veritabanı kullanıcı isteğiyle temizlendi: ${result.deletedCount} kayıt silindi.`);
+        
+        // Bellekteki sinyal takibini de sıfırla
+        for (const key in previousSignals) delete previousSignals[key];
+
+        res.json({ success: true, deletedCount: result.deletedCount });
+    } catch (err) {
+        console.error('[API] /api/signals/clear hatası:', err.message);
+        res.status(500).json({ success: false, error: 'Temizleme işlemi başarısız.' });
+    }
+});
+
 app.get('/api/market', (req, res) => res.json({
-    version: '5.6',
+    version: '5.7',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError

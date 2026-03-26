@@ -200,3 +200,22 @@ body {
     opacity: 1;
   }
 }
+.clear-history-btn {
+  background-color: var(--error-bg);
+  color: var(--error);
+  border: 1px solid var(--error);
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.clear-history-btn:hover {
+  background-color: var(--error);
+  color: white;
+}

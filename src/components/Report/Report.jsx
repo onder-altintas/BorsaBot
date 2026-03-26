@@ -57,6 +57,35 @@ const Report = ({ marketData }) => {
         return () => clearInterval(interval);
     }, [fetchPerformance]);
 
+    const handleClearData = async () => {
+        const password = window.prompt("Lütfen temizleme şifresini girin (6019):");
+        if (!password) return;
+
+        if (password !== '6019') {
+            alert("Hatalı şifre!");
+            return;
+        }
+
+        if (window.confirm("Tüm sinyal geçmişi ve başarı oranları kalıcı olarak silinecektir. Emin misiniz?")) {
+            try {
+                const res = await fetch(`${API_URL}/api/signals/clear`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`Başarıyla temizlendi! ${data.deletedCount} kayıt silindi.`);
+                    fetchPerformance();
+                } else {
+                    alert("Hata: " + data.error);
+                }
+            } catch (err) {
+                alert("İşlem sırasında bir hata oluştu.");
+            }
+        }
+    };
+
     const symbols = marketData?.map(s => s.symbol) || [];
 
     return (
@@ -80,7 +109,12 @@ const Report = ({ marketData }) => {
                             📜 Sinyal Geçmişi
                         </button>
                     </div>
-                    {view === 'summary' && <button className="report-refresh-btn" style={{ marginLeft: '1rem' }} onClick={fetchPerformance}>↻ Yenile</button>}
+                    {view === 'summary' && (
+                        <div style={{ display: 'flex', gap: '10px', marginLeft: '1rem' }}>
+                            <button className="report-refresh-btn" onClick={fetchPerformance}>↻ Yenile</button>
+                            <button className="clear-history-btn" onClick={handleClearData}>🗑️ Temizle</button>
+                        </div>
+                    )}
                 </div>
             </div>
 

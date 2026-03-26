@@ -358,6 +358,91 @@ const calculateVolumeMomentum = (history) => {
     return ((ema5 - ema10) / ema10) * 100;
 };
 
+// MACD Hesaplama (12, 26, 9) — Gerçek Sinyal Hattı ile
+const calculateMACD = (prices) => {
+    if (prices.length < 26) return { line: 0, signal: 0, hist: 0, prevLine: 0, prevSignal: 0 };
+
+    const calcEMAArray = (data, period) => {
+        const k = 2 / (period + 1);
+        const emaArr = [data[0]];
+        for (let i = 1; i < data.length; i++) {
+            emaArr.push(data[i] * k + emaArr[i - 1] * (1 - k));
+        }
+        return emaArr;
+    };
+
+    const ema12Arr = calcEMAArray(prices, 12);
+    const ema26Arr = calcEMAArray(prices, 26);
+    
+    const macdLineArr = ema12Arr.map((e12, i) => e12 - ema26Arr[i]);
+    const signalLineArr = calcEMAArray(macdLineArr, 9);
+    
+    const n = macdLineArr.length - 1;
+    const line = macdLineArr[n];
+    const signal = signalLineArr[n];
+    const hist = line - signal;
+    
+    return { 
+        line, 
+        signal, 
+        hist, 
+        prevLine: macdLineArr[n - 1] || 0, 
+        prevSignal: signalLineArr[n - 1] || 0 
+    };
+};
+
+// MACD Strateji Sinyal Hesaplama
+const calculateMACDSignal = (history) => {
+    if (history.length < 35) return 'TUT';
+    const prices = history.map(h => h.price);
+    
+    const { line, signal, prevLine, prevSignal } = calculateMACD(prices);
+    
+    const crossover  = prevLine <= prevSignal && line > signal;
+    const crossunder = prevLine >= prevSignal && line < signal;
+    
+    if (crossover)  return 'AL';
+    if (crossunder) return 'SAT';
+    return 'TUT';
+};
+
+
+// RSI Hesaplama (Seri)
+const calculateRSISeries = (prices, period = 14) => {
+    if (prices.length < period + 1) return Array(prices.length).fill(50);
+    const deltas = [];
+    for (let i = 1; i < prices.length; i++) deltas.push(prices[i] - prices[i - 1]);
+
+    const rsiArr = Array(period).fill(null);
+    let avgGain = deltas.slice(0, period).filter(d => d > 0).reduce((a, b) => a + b, 0) / period;
+    let avgLoss = deltas.slice(0, period).filter(d => d < 0).reduce((a, b) => a - b, 0) / period;
+
+    for (let i = period; i < deltas.length; i++) {
+        const gain = deltas[i] > 0 ? deltas[i] : 0;
+        const loss = deltas[i] < 0 ? -deltas[i] : 0;
+        avgGain = (avgGain * (period - 1) + gain) / period;
+        avgLoss = (avgLoss * (period - 1) + loss) / period;
+        const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+        rsiArr.push(100 - (100 / (1 + rs)));
+    }
+    return rsiArr;
+};
+
+// RSI Strateji Sinyal Hesaplama (30/70)
+const calculateRSISignal = (history) => {
+    if (history.length < 20) return 'TUT';
+    const prices = history.map(h => h.price);
+    const rsiArr = calculateRSISeries(prices, 14);
+    const n = rsiArr.length - 1;
+    const currRSI = rsiArr[n];
+    const prevRSI = rsiArr[n - 1] || 50;
+
+    if (prevRSI <= 30 && currRSI > 30) return 'AL';
+    if (prevRSI >= 70 && currRSI < 70) return 'SAT';
+    return 'TUT';
+};
+
+
 // Fisher-BB-EMA Hibrit Strateji Sinyal Hesaplama
 const calculateFisherBBEMASignal = (history) => {
     if (history.length < 50) return 'TUT';
@@ -427,11 +512,9 @@ const calculateIndicators = (history, currentPrice, symbol) => {
     }
     const rsi = losses === 0 ? 100 : 100 - (100 / (1 + gains / losses));
 
-    const ema12 = calculateEMA(prices, 12);
-    const ema26 = calculateEMA(prices, 26);
-    const macdLine = ema12 - ema26;
-    const macdSignal = macdLine * 0.9;
-    const macdHist = macdLine - macdSignal;
+    const { line, signal, hist } = calculateMACD(prices);
+    const rsiArr = calculateRSISeries(prices, 14);
+    const rsi = rsiArr[rsiArr.length - 1] || 50;
 
     const bbPeriod = Math.min(prices.length, 20);
     const bbMiddle = prices.slice(-bbPeriod).reduce((a, b) => a + b, 0) / bbPeriod;
@@ -445,14 +528,24 @@ const calculateIndicators = (history, currentPrice, symbol) => {
         sma10: parseFloat(sma10.toFixed(2)),
         ema7: parseFloat(ema7.toFixed(2)),
         rsi: parseFloat(rsi.toFixed(2)),
-        macd: { line: parseFloat(macdLine.toFixed(2)), signal: parseFloat(macdSignal.toFixed(2)), hist: parseFloat(macdHist.toFixed(2)) },
+        macd: { 
+            line: parseFloat(line.toFixed(4)), 
+            signal: parseFloat(signal.toFixed(4)), 
+            hist: parseFloat(hist.toFixed(4)) 
+        },
         bollinger: { upper: parseFloat((bbMiddle + stdDev * 2).toFixed(2)), middle: parseFloat(bbMiddle.toFixed(2)), lower: parseFloat((bbMiddle - stdDev * 2).toFixed(2)) },
         qqe_1h,
         qqe_4h: 'TUT', 
         qqe_1d: 'TUT',
         fisher_1h: calculateFisherBBEMASignal(history),
         fisher_4h: 'TUT',
-        fisher_1d: 'TUT'
+        fisher_1d: 'TUT',
+        macd_1h: calculateMACDSignal(history),
+        macd_4h: 'TUT',
+        macd_1d: 'TUT',
+        rsi_1h: calculateRSISignal(history),
+        rsi_4h: 'TUT',
+        rsi_1d: 'TUT'
     };
 };
 
@@ -544,6 +637,14 @@ const fetchRealMarketData = async () => {
                 const fisher_4h = calculateFisherBBEMASignal(history4h);
                 const fisher_1d = calculateFisherBBEMASignal(history1d);
 
+                const macd_1h = calculateMACDSignal(history1h);
+                const macd_4h = calculateMACDSignal(history4h);
+                const macd_1d = calculateMACDSignal(history1d);
+
+                const rsi_1h = calculateRSISignal(history1h);
+                const rsi_4h = calculateRSISignal(history4h);
+                const rsi_1d = calculateRSISignal(history1d);
+
                 const indicators = calculateIndicators(history1h, newPrice, stock.symbol);
                 indicators.qqe_1h = qqe_1h;
                 indicators.qqe_4h = qqe_4h;
@@ -551,6 +652,12 @@ const fetchRealMarketData = async () => {
                 indicators.fisher_1h = fisher_1h;
                 indicators.fisher_4h = fisher_4h;
                 indicators.fisher_1d = fisher_1d;
+                indicators.macd_1h = macd_1h;
+                indicators.macd_4h = macd_4h;
+                indicators.macd_1d = macd_1d;
+                indicators.rsi_1h = rsi_1h;
+                indicators.rsi_4h = rsi_4h;
+                indicators.rsi_1d = rsi_1d;
 
                 return {
                     ...stock,
@@ -584,7 +691,7 @@ const fetchRealMarketData = async () => {
 
                 for (const stock of marketData) {
                     if (!stock.indicators || stock.price === 0) continue;
-                    const STRATEGIES = ['QQE', 'Fisher-BB-EMA'];
+                    const STRATEGIES = ['QQE', 'Fisher-BB-EMA', 'MACD', 'RSI'];
                     const TIMEFRAMES = ['1h', '4h', '1d'];
 
                     for (const strat of STRATEGIES) {
@@ -594,8 +701,12 @@ const fetchRealMarketData = async () => {
                             
                             if (strat === 'QQE') {
                                 newSig = tf === '4h' ? stock.indicators.qqe_4h : tf === '1d' ? stock.indicators.qqe_1d : stock.indicators.qqe_1h;
-                            } else {
+                            } else if (strat === 'Fisher-BB-EMA') {
                                 newSig = tf === '4h' ? stock.indicators.fisher_4h : tf === '1d' ? stock.indicators.fisher_1d : stock.indicators.fisher_1h;
+                            } else if (strat === 'MACD') {
+                                newSig = tf === '4h' ? stock.indicators.macd_4h : tf === '1d' ? stock.indicators.macd_1d : stock.indicators.macd_1h;
+                            } else if (strat === 'RSI') {
+                                newSig = tf === '4h' ? stock.indicators.rsi_4h : tf === '1d' ? stock.indicators.rsi_1d : stock.indicators.rsi_1h;
                             }
 
                             if (newSig === 'AL' || newSig === 'SAT') {
@@ -658,6 +769,14 @@ const fetchRealMarketData = async () => {
                                 if (timeframe === '4h') rec = stock.indicators?.fisher_4h || 'TUT';
                                 else if (timeframe === '1d') rec = stock.indicators?.fisher_1d || 'TUT';
                                 else rec = stock.indicators?.fisher_1h || 'TUT';
+                            } else if (strategy === 'MACD') {
+                                if (timeframe === '4h') rec = stock.indicators?.macd_4h || 'TUT';
+                                else if (timeframe === '1d') rec = stock.indicators?.macd_1d || 'TUT';
+                                else rec = stock.indicators?.macd_1h || 'TUT';
+                            } else if (strategy === 'RSI') {
+                                if (timeframe === '4h') rec = stock.indicators?.rsi_4h || 'TUT';
+                                else if (timeframe === '1d') rec = stock.indicators?.rsi_1d || 'TUT';
+                                else rec = stock.indicators?.rsi_1h || 'TUT';
                             } else {
                                 if (timeframe === '4h') rec = stock.indicators?.qqe_4h || 'TUT';
                                 else if (timeframe === '1d') rec = stock.indicators?.qqe_1d || 'TUT';
@@ -878,7 +997,7 @@ setInterval(fetchRealMarketData, 20000);
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.4',
+    version: '5.6',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError
@@ -934,7 +1053,7 @@ app.get('/api/signals/performance', async (req, res) => {
         const result = {};
 
         for (const symbol of symbols) {
-            result[symbol] = { QQE: {}, 'Fisher-BB-EMA': {}, best: null };
+            result[symbol] = { QQE: {}, 'Fisher-BB-EMA': {}, MACD: {}, RSI: {}, best: null };
             let maxRate = -1;
 
             for (const strat of STRATEGIES) {
@@ -1341,7 +1460,7 @@ app.use((req, res, next) => {
 const initializePreviousSignals = async () => {
     try {
         console.log('🔄 Sinyal geçmişi veritabanından yükleniyor ve temizleniyor...');
-        const STRATEGIES = ['QQE', 'Fisher-BB-EMA'];
+        const STRATEGIES = ['QQE', 'Fisher-BB-EMA', 'MACD', 'RSI'];
         const TIMEFRAMES = ['1h', '4h', '1d'];
         const symbols = BIST_STOCK_SYMBOLS.map(s => s.symbol);
 

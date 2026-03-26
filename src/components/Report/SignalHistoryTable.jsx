@@ -66,6 +66,8 @@ const SignalHistoryTable = () => {
                         <option value="">Tüm Stratejiler</option>
                         <option value="QQE">QQE</option>
                         <option value="Fisher-BB-EMA">Fisher-BB-EMA</option>
+                        <option value="MACD">MACD</option>
+                        <option value="RSI">RSI</option>
                     </select>
                 </div>
                 <div className="history-total-info">

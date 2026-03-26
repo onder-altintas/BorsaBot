@@ -4,8 +4,10 @@ import './Report.css';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
-const QQE_LABELS = { '1h': 'QQE 1S', '4h': 'QQE 4S', '1d': 'QQE Günlük' };
-const FISHER_LABELS = { '1h': 'Fisher 1S', '4h': 'Fisher 4S', '1d': 'Fisher Günlük' };
+const QQE_LABELS = { '1h': 'QQE 1S', '4h': 'QQE 4S', '1d': 'QQE GÜN' };
+const FISHER_LABELS = { '1h': 'Fisher 1S', '4h': 'Fisher 4S', '1d': 'Fisher GÜN' };
+const MACD_LABELS = { '1h': 'MACD 1S', '4h': 'MACD 4S', '1d': 'MACD GÜN' };
+const RSI_LABELS = { '1h': 'RSI 1S', '4h': 'RSI 4S', '1d': 'RSI GÜN' };
 const TIMEFRAMES = ['1h', '4h', '1d'];
 
 const getRateClass = (rate) => {
@@ -109,6 +111,12 @@ const Report = ({ marketData }) => {
                                         {TIMEFRAMES.map(tf => (
                                             <th key={`f-${tf}`} className="col-tf" style={{ borderLeft: tf === '1h' ? '2px solid var(--border-color)' : '' }}>{FISHER_LABELS[tf]}</th>
                                         ))}
+                                        {TIMEFRAMES.map(tf => (
+                                            <th key={`m-${tf}`} className="col-tf" style={{ borderLeft: tf === '1h' ? '2px solid var(--border-color)' : '' }}>{MACD_LABELS[tf]}</th>
+                                        ))}
+                                        {TIMEFRAMES.map(tf => (
+                                            <th key={`r-${tf}`} className="col-tf" style={{ borderLeft: tf === '1h' ? '2px solid var(--border-color)' : '' }}>{RSI_LABELS[tf]}</th>
+                                        ))}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -117,6 +125,8 @@ const Report = ({ marketData }) => {
                                         const d = perfData?.[symbol];
                                         const qqeData = d?.QQE;
                                         const fisherData = d?.['Fisher-BB-EMA'];
+                                        const macdData = d?.MACD;
+                                        const rsiData = d?.RSI;
                                         const best = d?.best;
                                         const shortName = stock?.name || symbol.replace('.IS', '');
 
@@ -129,7 +139,7 @@ const Report = ({ marketData }) => {
                                                 <td className="col-best-cell">
                                                     {best ? (
                                                         <span className={`best-badge ${getRateClass(best.rate)}`}>
-                                                            {best.strategy === 'QQE' ? 'QQE' : 'Fisher+'} {best.timeframe === '1h' ? '1S' : best.timeframe === '4h' ? '4S' : 'Günlük'} · %{best.rate}
+                                                            {best.strategy === 'QQE' ? 'QQE' : best.strategy === 'MACD' ? 'MACD' : best.strategy === 'RSI' ? 'RSI' : 'Fisher+'} {best.timeframe === '1h' ? '1S' : best.timeframe === '4h' ? '4S' : 'GÜN'} · %{best.rate}
                                                         </span>
                                                     ) : (
                                                         <span className="no-data">Veri yok</span>
@@ -140,6 +150,12 @@ const Report = ({ marketData }) => {
                                                 ))}
                                                 {TIMEFRAMES.map(tf => (
                                                     <RateCell key={`f-${tf}`} data={fisherData?.[tf]} />
+                                                ))}
+                                                {TIMEFRAMES.map(tf => (
+                                                    <RateCell key={`m-${tf}`} data={macdData?.[tf]} />
+                                                ))}
+                                                {TIMEFRAMES.map(tf => (
+                                                    <RateCell key={`r-${tf}`} data={rsiData?.[tf]} />
                                                 ))}
                                             </tr>
                                         );

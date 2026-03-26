@@ -41,6 +41,10 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                         let rawSig = 'TUT';
                         if (strat === 'Fisher-BB-EMA') {
                             rawSig = tf === '4h' ? ind.fisher_4h : tf === '1d' ? ind.fisher_1d : ind.fisher_1h;
+                        } else if (strat === 'MACD') {
+                            rawSig = tf === '4h' ? ind.macd_4h : tf === '1d' ? ind.macd_1d : ind.macd_1h;
+                        } else if (strat === 'RSI') {
+                            rawSig = tf === '4h' ? ind.rsi_4h : tf === '1d' ? ind.rsi_1d : ind.rsi_1h;
                         } else {
                             rawSig = tf === '4h' ? ind.qqe_4h : tf === '1d' ? ind.qqe_1d : ind.qqe_1h;
                         }
@@ -98,6 +102,8 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                                 >
                                     <option value="QQE">QQE</option>
                                     <option value="Fisher-BB-EMA">Fisher+</option>
+                                    <option value="MACD">MACD</option>
+                                    <option value="RSI">RSI</option>
                                 </select>
                                 <select
                                     className="bot-amount-input"

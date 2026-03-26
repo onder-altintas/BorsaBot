@@ -309,6 +309,108 @@ const calculateQQESignal = (history) => {
     return 'TUT';
 };
 
+// Fisher Transform Hesaplama (Ehlers)
+const calculateFisherTransform = (history, period = 10) => {
+    if (history.length < period) return { fisher: 0, prevFisher: 0 };
+    
+    // Period içindeki High ve Low değerlerini bul
+    const values = [];
+    const fishers = [];
+    let prevValue = 0;
+    let prevFisher = 0;
+
+    for (let i = period; i <= history.length; i++) {
+        const slice = history.slice(i - period, i);
+        const high = Math.max(...slice.map(h => h.high || h.price));
+        const low = Math.min(...slice.map(h => h.low || h.price));
+        const close = slice[slice.length - 1].price;
+
+        let num = close - low;
+        let den = high - low;
+        if (den === 0) den = 0.001;
+
+        let val = 0.33 * 2 * (num / den - 0.5) + 0.67 * prevValue;
+        val = Math.min(Math.max(val, -0.999), 0.999);
+        
+        let fish = 0.5 * Math.log((1 + val) / (1 - val)) + 0.5 * prevFisher;
+        
+        values.push(val);
+        fishers.push(fish);
+        prevValue = val;
+        prevFisher = fish;
+    }
+
+    return { 
+        fisher: fishers[fishers.length - 1] || 0, 
+        prevFisher: fishers[fishers.length - 2] || 0 
+    };
+};
+
+// Volume Momentum (Volume Oscillator) Hesaplama
+const calculateVolumeMomentum = (history) => {
+    if (history.length < 10) return 0;
+    const volumes = history.map(h => h.volume || 0);
+    
+    const ema5 = calculateEMA(volumes, 5);
+    const ema10 = calculateEMA(volumes, 10);
+    
+    if (ema10 === 0) return 0;
+    return ((ema5 - ema10) / ema10) * 100;
+};
+
+// Fisher-BB-EMA Hibrit Strateji Sinyal Hesaplama
+const calculateFisherBBEMASignal = (history) => {
+    if (history.length < 50) return 'TUT';
+
+    const prices = history.map(h => h.price);
+    const ema20 = calculateEMA(prices, 20);
+    const ema50 = calculateEMA(prices, 50);
+    const lastPrice = prices[prices.length - 1];
+    
+    // Bollinger Bands
+    const bbPeriod = 20;
+    const bbSlice = prices.slice(-bbPeriod);
+    const bbMiddle = bbSlice.reduce((a, b) => a + b, 0) / bbPeriod;
+    const variance = bbSlice.reduce((a, b) => a + Math.pow(b - bbMiddle, 2), 0) / bbPeriod;
+    const stdDev = Math.sqrt(variance);
+    const bbUpper = bbMiddle + stdDev * 2;
+
+    // RSI
+    let gains = 0, losses = 0;
+    for (let i = Math.max(1, prices.length - 14); i < prices.length; i++) {
+        const diff = prices[i] - prices[i - 1];
+        if (diff >= 0) gains += diff; else losses -= diff;
+    }
+    const rsi = losses === 0 ? 100 : 100 - (100 / (1 + gains / losses));
+
+    // Fisher & Volume
+    const { fisher, prevFisher } = calculateFisherTransform(history, 10);
+    const vmo = calculateVolumeMomentum(history);
+
+    // Kesişim Kontrolleri
+    const fisherCrossUp = prevFisher <= -2.5 && fisher > -2.5;
+    const fisherCrossDown = prevFisher >= 2.5 && fisher < 2.5;
+
+    // AL KOŞULLARI
+    // 1. Fiyat EMA20 üzerinde
+    // 2. EMA20 > EMA50 (Trend)
+    // 3. Fisher alttan yukarı kesişim
+    // 4. RSI > 50
+    // 5. Hacim Momemtumu pozitif
+    const buyCondition = lastPrice > ema20 && ema20 > ema50 && fisher > prevFisher && rsi > 50 && vmo > 0;
+    
+    // SAT KOŞULLARI
+    // 1. Fiyat BB Üst Bandına değdi/geçti
+    // 2. Fisher tepeden aşağı kesişim
+    // 3. Fiyat EMA20 altında kapanış (Trend dönüşü/Stop)
+    const sellCondition = lastPrice >= bbUpper || fisher < prevFisher && prevFisher > 2.0 || lastPrice < ema20;
+
+    if (buyCondition) return 'AL';
+    if (sellCondition) return 'SAT';
+    return 'TUT';
+};
+
+
 // Gösterge hesaplama fonksiyonu (geriye dönük uyumluluk için)
 const calculateIndicators = (history, currentPrice, symbol) => {
     if (history.length < 2) return { sma5: 0, sma10: 0, ema7: 0, rsi: 50, macd: { line: 0, signal: 0, hist: 0 }, bollinger: { upper: 0, middle: 0, lower: 0 }, qqe_1h: 'TUT', qqe_4h: 'TUT', qqe_1d: 'TUT' };
@@ -346,8 +448,11 @@ const calculateIndicators = (history, currentPrice, symbol) => {
         macd: { line: parseFloat(macdLine.toFixed(2)), signal: parseFloat(macdSignal.toFixed(2)), hist: parseFloat(macdHist.toFixed(2)) },
         bollinger: { upper: parseFloat((bbMiddle + stdDev * 2).toFixed(2)), middle: parseFloat(bbMiddle.toFixed(2)), lower: parseFloat((bbMiddle - stdDev * 2).toFixed(2)) },
         qqe_1h,
-        qqe_4h: 'TUT', // fetchRealMarketData tarafından doldurulur
-        qqe_1d: 'TUT'  // fetchRealMarketData tarafından doldurulur
+        qqe_4h: 'TUT', 
+        qqe_1d: 'TUT',
+        fisher_1h: calculateFisherBBEMASignal(history),
+        fisher_4h: 'TUT',
+        fisher_1d: 'TUT'
     };
 };
 
@@ -430,15 +535,22 @@ const fetchRealMarketData = async () => {
                 const chart1d = await yahooFinance.chart(stock.symbol, { period1: start1d, interval: '1d' });
                 const history1d = mapHistory(chart1d.quotes).slice(-100);
 
-                // QQE Sinyalleri: her zaman dilimi için ayrı hesapla
+                // Strateji Sinyalleri
                 const qqe_1h = calculateQQESignal(history1h);
                 const qqe_4h = calculateQQESignal(history4h);
                 const qqe_1d = calculateQQESignal(history1d);
+
+                const fisher_1h = calculateFisherBBEMASignal(history1h);
+                const fisher_4h = calculateFisherBBEMASignal(history4h);
+                const fisher_1d = calculateFisherBBEMASignal(history1d);
 
                 const indicators = calculateIndicators(history1h, newPrice, stock.symbol);
                 indicators.qqe_1h = qqe_1h;
                 indicators.qqe_4h = qqe_4h;
                 indicators.qqe_1d = qqe_1d;
+                indicators.fisher_1h = fisher_1h;
+                indicators.fisher_4h = fisher_4h;
+                indicators.fisher_1d = fisher_1d;
 
                 return {
                     ...stock,
@@ -472,35 +584,44 @@ const fetchRealMarketData = async () => {
 
                 for (const stock of marketData) {
                     if (!stock.indicators || stock.price === 0) continue;
-                    for (const tf of TIMEFRAMES) {
-                        const sigKey = `${stock.symbol}_${tf}`;
-                        const newSig = tf === '4h' ? stock.indicators.qqe_4h
-                                     : tf === '1d' ? stock.indicators.qqe_1d
-                                     : stock.indicators.qqe_1h;
+                    const STRATEGIES = ['QQE', 'Fisher-BB-EMA'];
+                    const TIMEFRAMES = ['1h', '4h', '1d'];
 
-                        if (newSig === 'AL' || newSig === 'SAT') {
-                            // Veritabanındaki en son kaydı kontrol et (Kesin Mükerrer Önleme)
-                            const lastRecordInDb = await SignalHistory.findOne({ 
-                                symbol: stock.symbol, 
-                                strategy: 'QQE',
-                                timeframe: tf 
-                            }).sort({ createdAt: -1 }).lean();
+                    for (const strat of STRATEGIES) {
+                        for (const tf of TIMEFRAMES) {
+                            const sigKey = `${stock.symbol}_${strat}_${tf}`;
+                            let newSig = 'TUT';
+                            
+                            if (strat === 'QQE') {
+                                newSig = tf === '4h' ? stock.indicators.qqe_4h : tf === '1d' ? stock.indicators.qqe_1d : stock.indicators.qqe_1h;
+                            } else {
+                                newSig = tf === '4h' ? stock.indicators.fisher_4h : tf === '1d' ? stock.indicators.fisher_1d : stock.indicators.fisher_1h;
+                            }
 
-                            if (!lastRecordInDb || lastRecordInDb.signal !== newSig) {
-                                previousSignals[sigKey] = newSig;
-                                try {
-                                    await SignalHistory.create({
-                                        symbol:    stock.symbol,
-                                        strategy:  'QQE',
-                                        timeframe: tf,
-                                        signal:    newSig,
-                                        price:     stock.price,
-                                        date:      nowDate,
-                                        time:      nowTime
-                                    });
-                                    console.log(`[SIGNAL HISTORY] ${stock.symbol} | QQE | ${tf} | ${newSig} | ${nowDate} ${nowTime} (Kaydedildi)`);
-                                } catch (shErr) {
-                                    console.error('[SignalHistory] Global kayıt hatası:', shErr.message);
+                            if (newSig === 'AL' || newSig === 'SAT') {
+                                // Veritabanındaki en son kaydı kontrol et
+                                const lastRecordInDb = await SignalHistory.findOne({ 
+                                    symbol: stock.symbol, 
+                                    strategy: strat,
+                                    timeframe: tf 
+                                }).sort({ createdAt: -1 }).lean();
+
+                                if (!lastRecordInDb || lastRecordInDb.signal !== newSig) {
+                                    previousSignals[sigKey] = newSig;
+                                    try {
+                                        await SignalHistory.create({
+                                            symbol:    stock.symbol,
+                                            strategy:  strat,
+                                            timeframe: tf,
+                                            signal:    newSig,
+                                            price:     stock.price,
+                                            date:      nowDate,
+                                            time:      nowTime
+                                        });
+                                        console.log(`[SIGNAL HISTORY] ${stock.symbol} | ${strat} | ${tf} | ${newSig} | ${nowDate} ${nowTime} (Kaydedildi)`);
+                                    } catch (shErr) {
+                                        console.error('[SignalHistory] Global kayıt hatası:', shErr.message);
+                                    }
                                 }
                             }
                         }
@@ -528,15 +649,19 @@ const fetchRealMarketData = async () => {
                             const stock = marketData.find(s => s.symbol === symbol);
                             if (!stock) continue;
 
-                            // Zaman dilimine göre sinyal seç
+                            // Strateji ve Zaman dilimine göre sinyal seç
                             const timeframe = config.timeframe || '1h';
+                            const strategy = config.strategy || 'QQE';
                             let rec = 'TUT';
-                            if (timeframe === '4h') {
-                                rec = stock.indicators?.qqe_4h || 'TUT';
-                            } else if (timeframe === '1d') {
-                                rec = stock.indicators?.qqe_1d || 'TUT';
+
+                            if (strategy === 'Fisher-BB-EMA') {
+                                if (timeframe === '4h') rec = stock.indicators?.fisher_4h || 'TUT';
+                                else if (timeframe === '1d') rec = stock.indicators?.fisher_1d || 'TUT';
+                                else rec = stock.indicators?.fisher_1h || 'TUT';
                             } else {
-                                rec = stock.indicators?.qqe_1h || 'TUT';
+                                if (timeframe === '4h') rec = stock.indicators?.qqe_4h || 'TUT';
+                                else if (timeframe === '1d') rec = stock.indicators?.qqe_1d || 'TUT';
+                                else rec = stock.indicators?.qqe_1h || 'TUT';
                             }
 
                             // Sinyal değişimi algılama
@@ -573,7 +698,7 @@ const fetchRealMarketData = async () => {
                                                 total: netRevenue,
                                                 date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
                                                 isAuto: true,
-                                                reason: 'QQE(' + timeframe + ') Sinyali (Anında)'
+                                                reason: strategy + '(' + timeframe + ') Sinyali (Anında)'
                                             }, ...user.history];
 
                                             config.lastAction = 'SELL';
@@ -628,7 +753,7 @@ const fetchRealMarketData = async () => {
                                             total: totalCost,
                                             date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
                                             isAuto: true,
-                                            reason: 'QQE(' + timeframe + ') Sinyali (1 Saat Gecikmeli)'
+                                            reason: strategy + '(' + timeframe + ') Sinyali (1 Saat Gecikmeli)'
                                         }, ...user.history];
 
                                         config.lastAction = 'BUY';
@@ -753,7 +878,7 @@ setInterval(fetchRealMarketData, 20000);
 
 // API Endpoints
 app.get('/api/market', (req, res) => res.json({
-    version: '5.3',
+    version: '5.4',
     timestamp: Date.now(),
     data: marketData,
     error: globalFetchError
@@ -762,13 +887,13 @@ app.get('/api/market', (req, res) => res.json({
 // Sinyal Geçmişi API - Sayfalama ve Filtreleme
 app.get('/api/signals/history', async (req, res) => {
     try {
-        const { symbol, timeframe, page = 1, limit = 50 } = req.query;
+        const { symbol, timeframe, strategy, page = 1, limit = 50 } = req.query;
         const query = {};
         if (symbol) {
-            // "THYAO" araması hem "THYAO" hem de "THYAO.IS" için çalışsın
             query.symbol = { $regex: symbol, $options: 'i' };
         }
         if (timeframe) query.timeframe = timeframe;
+        if (strategy) query.strategy = strategy;
 
         const p = parseInt(page);
         const l = parseInt(limit);
@@ -799,9 +924,9 @@ app.get('/api/signals/performance', async (req, res) => {
     try {
         const COMMISSION_RATE = 0.0005; // %0.05 alım + %0.05 satım
         const TIMEFRAMES = ['1h', '4h', '1d'];
+        const STRATEGIES = ['QQE', 'Fisher-BB-EMA'];
         const symbols = marketData.map(s => s.symbol);
 
-        // Tüm kayıtları çek (eskiden yeniye sıralı)
         const allRecords = await SignalHistory.find({ symbol: { $in: symbols } })
             .sort({ createdAt: 1 })
             .lean();
@@ -809,54 +934,43 @@ app.get('/api/signals/performance', async (req, res) => {
         const result = {};
 
         for (const symbol of symbols) {
-            result[symbol] = {};
-            for (const tf of TIMEFRAMES) {
-                const records = allRecords.filter(r => r.symbol === symbol && r.timeframe === tf);
-                let success = 0, fail = 0, open = 0;
-                let i = 0;
-                while (i < records.length) {
-                    if (records[i].signal === 'AL') {
-                        const buyPrice = records[i].price;
-                        // Sonraki SAT'ı bul
-                        let j = i + 1;
-                        while (j < records.length && records[j].signal !== 'SAT') j++;
-                        if (j < records.length && records[j].signal === 'SAT') {
-                            const sellPrice = records[j].price;
-                            const totalCommission = buyPrice * COMMISSION_RATE + sellPrice * COMMISSION_RATE;
-                            if (sellPrice - buyPrice > totalCommission) {
-                                success++;
+            result[symbol] = { QQE: {}, 'Fisher-BB-EMA': {}, best: null };
+            let maxRate = -1;
+
+            for (const strat of STRATEGIES) {
+                for (const tf of TIMEFRAMES) {
+                    const records = allRecords.filter(r => r.symbol === symbol && r.timeframe === tf && r.strategy === strat);
+                    let success = 0, fail = 0, open = 0;
+                    let i = 0;
+                    while (i < records.length) {
+                        if (records[i].signal === 'AL') {
+                            const buyPrice = records[i].price;
+                            let j = i + 1;
+                            while (j < records.length && records[j].signal !== 'SAT') j++;
+                            
+                            if (j < records.length && records[j].signal === 'SAT') {
+                                const sellPrice = records[j].price;
+                                const totalCommission = buyPrice * COMMISSION_RATE + sellPrice * COMMISSION_RATE;
+                                if (sellPrice - buyPrice > totalCommission) success++; else fail++;
+                                i = j + 1;
                             } else {
-                                fail++;
+                                open++; i++;
                             }
-                            i = j + 1;
                         } else {
-                            // SAT henüz gelmemiş — açık pozisyon
-                            open++;
                             i++;
                         }
-                    } else {
-                        i++;
+                    }
+                    const total = success + fail;
+                    const rate = total > 0 ? Math.round((success / total) * 100) : null;
+                    
+                    result[symbol][strat][tf] = { success, fail, open, total, rate };
+
+                    if (rate !== null && rate > maxRate) {
+                        maxRate = rate;
+                        result[symbol].best = { strategy: strat, timeframe: tf, rate };
                     }
                 }
-                const total = success + fail;
-                result[symbol][tf] = {
-                    success,
-                    fail,
-                    open,
-                    total,
-                    rate: total > 0 ? Math.round((success / total) * 100) : null
-                };
             }
-
-            // En iyi strateji/saat
-            let best = null;
-            for (const tf of TIMEFRAMES) {
-                const d = result[symbol][tf];
-                if (d.rate !== null && (best === null || d.rate > best.rate)) {
-                    best = { timeframe: tf, rate: d.rate };
-                }
-            }
-            result[symbol].best = best;
         }
 
         res.json({ success: true, data: result });
@@ -1227,12 +1341,13 @@ app.use((req, res, next) => {
 const initializePreviousSignals = async () => {
     try {
         console.log('🔄 Sinyal geçmişi veritabanından yükleniyor ve temizleniyor...');
+        const STRATEGIES = ['QQE', 'Fisher-BB-EMA'];
         const TIMEFRAMES = ['1h', '4h', '1d'];
         const symbols = BIST_STOCK_SYMBOLS.map(s => s.symbol);
 
-        // 1. Mükerrer kayıtları temizle
+        // 1. Mükerrer kayıtları temizle (Strateji bazlı)
         const allRecords = await SignalHistory.find({})
-            .sort({ symbol: 1, timeframe: 1, createdAt: 1 })
+            .sort({ symbol: 1, strategy: 1, timeframe: 1, createdAt: 1 })
             .lean();
 
         const idsToDelete = [];
@@ -1240,6 +1355,7 @@ const initializePreviousSignals = async () => {
         for (const record of allRecords) {
             if (lastRecord && 
                 lastRecord.symbol === record.symbol && 
+                lastRecord.strategy === record.strategy && 
                 lastRecord.timeframe === record.timeframe && 
                 lastRecord.signal === record.signal) {
                 idsToDelete.push(record._id);
@@ -1255,13 +1371,21 @@ const initializePreviousSignals = async () => {
 
         // 2. Son sinyalleri belleğe yükle
         for (const symbol of symbols) {
-            for (const tf of TIMEFRAMES) {
-                const lastSignal = await SignalHistory.findOne({ symbol, timeframe: tf })
-                    .sort({ createdAt: -1 })
-                    .lean();
+            for (const strat of STRATEGIES) {
+                for (const tf of TIMEFRAMES) {
+                    const lastSignal = await SignalHistory.findOne({ symbol, strategy: strat, timeframe: tf })
+                        .sort({ createdAt: -1 })
+                        .lean();
 
-                if (lastSignal) {
-                    previousSignals[`${symbol}_${tf}`] = lastSignal.signal;
+                    if (lastSignal) {
+                        const sigKey = `${symbol}_${strat}_${tf}`;
+                        previousSignals[sigKey] = lastSignal.signal;
+                        
+                        // Geriye dönük uyumluluk: Eğer QQE ise eski anahtar formatını da doldur
+                        if (strat === 'QQE') {
+                            previousSignals[`${symbol}_${tf}`] = lastSignal.signal;
+                        }
+                    }
                 }
             }
         }

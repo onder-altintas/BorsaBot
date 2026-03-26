@@ -10,6 +10,7 @@ const SignalHistoryTable = () => {
     const [total, setTotal] = useState(0);
     const [symbolFilter, setSymbolFilter] = useState('');
     const [tfFilter, setTfFilter] = useState('');
+    const [stratFilter, setStratFilter] = useState('');
 
     const fetchHistory = useCallback(async () => {
         setLoading(true);
@@ -18,7 +19,8 @@ const SignalHistoryTable = () => {
                 page,
                 limit: 50,
                 symbol: symbolFilter,
-                timeframe: tfFilter
+                timeframe: tfFilter,
+                strategy: stratFilter
             });
             const res = await fetch(`${API_URL}/api/signals/history?${params}`);
             const json = await res.json();
@@ -32,7 +34,7 @@ const SignalHistoryTable = () => {
         } finally {
             setLoading(false);
         }
-    }, [page, symbolFilter, tfFilter]);
+    }, [page, symbolFilter, tfFilter, stratFilter]);
 
     useEffect(() => {
         fetchHistory();
@@ -54,10 +56,16 @@ const SignalHistoryTable = () => {
                         onChange={(e) => { setTfFilter(e.target.value); setPage(1); }}
                         className="history-select"
                     >
-                        <option value="">Tüm Zaman Dilimleri</option>
-                        <option value="1h">1 Saatlik (1S)</option>
-                        <option value="4h">4 Saatlik (4S)</option>
                         <option value="1d">Günlük (GÜN)</option>
+                    </select>
+                    <select 
+                        value={stratFilter} 
+                        onChange={(e) => { setStratFilter(e.target.value); setPage(1); }}
+                        className="history-select"
+                    >
+                        <option value="">Tüm Stratejiler</option>
+                        <option value="QQE">QQE</option>
+                        <option value="Fisher-BB-EMA">Fisher-BB-EMA</option>
                     </select>
                 </div>
                 <div className="history-total-info">

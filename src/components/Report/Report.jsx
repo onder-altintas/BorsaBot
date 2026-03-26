@@ -29,6 +29,7 @@ const RateCell = ({ data }) => {
 
 const Report = ({ marketData }) => {
     const [view, setView] = useState('summary'); // 'summary' veya 'history'
+    const [selectedStrategy, setSelectedStrategy] = useState('QQE'); // 'QQE' veya 'Fisher-BB-EMA'
     const [perfData, setPerfData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [lastUpdated, setLastUpdated] = useState(null);
@@ -77,7 +78,18 @@ const Report = ({ marketData }) => {
                             📜 Sinyal Geçmişi
                         </button>
                     </div>
-                    {view === 'summary' && <button className="report-refresh-btn" onClick={fetchPerformance}>↻ Yenile</button>}
+                    {view === 'summary' && (
+                        <select 
+                            className="strategy-select-minimal"
+                            value={selectedStrategy}
+                            onChange={(e) => setSelectedStrategy(e.target.value)}
+                            style={{ marginLeft: '1rem', padding: '0.3rem', borderRadius: '4px', background: 'var(--card-bg)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+                        >
+                            <option value="QQE">Strateji: QQE</option>
+                            <option value="Fisher-BB-EMA">Strateji: Fisher+</option>
+                        </select>
+                    )}
+                    {view === 'summary' && <button className="report-refresh-btn" style={{ marginLeft: '0.5rem' }} onClick={fetchPerformance}>↻ Yenile</button>}
                 </div>
             </div>
 
@@ -111,6 +123,7 @@ const Report = ({ marketData }) => {
                                     {symbols.map(symbol => {
                                         const stock = marketData.find(s => s.symbol === symbol);
                                         const d = perfData?.[symbol];
+                                        const stratData = d?.[selectedStrategy];
                                         const best = d?.best;
                                         const shortName = stock?.name || symbol.replace('.IS', '');
 
@@ -123,14 +136,14 @@ const Report = ({ marketData }) => {
                                                 <td className="col-best-cell">
                                                     {best ? (
                                                         <span className={`best-badge ${getRateClass(best.rate)}`}>
-                                                            {TF_LABELS[best.timeframe]} · %{best.rate}
+                                                            {best.strategy === 'QQE' ? 'QQE' : 'Fisher+'} {TF_LABELS[best.timeframe].split(' ')[1]} · %{best.rate}
                                                         </span>
                                                     ) : (
                                                         <span className="no-data">Veri yok</span>
                                                     )}
                                                 </td>
                                                 {TIMEFRAMES.map(tf => (
-                                                    <RateCell key={tf} data={d?.[tf]} />
+                                                    <RateCell key={tf} data={stratData?.[tf]} />
                                                 ))}
                                             </tr>
                                         );

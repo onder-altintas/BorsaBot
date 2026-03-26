@@ -34,10 +34,16 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
 
                     let displaySignal = 'BEKLİYOR';
                     const tf = botConfig.timeframe || '1h';
+                    const strat = botConfig.strategy || 'QQE';
                     const stockData = marketData.find ? marketData.find(s => s.symbol === stock.symbol) : null;
                     if (stockData) {
                         const ind = stockData.indicators || {};
-                        const rawSig = tf === '4h' ? ind.qqe_4h : tf === '1d' ? ind.qqe_1d : ind.qqe_1h;
+                        let rawSig = 'TUT';
+                        if (strat === 'Fisher-BB-EMA') {
+                            rawSig = tf === '4h' ? ind.fisher_4h : tf === '1d' ? ind.fisher_1d : ind.fisher_1h;
+                        } else {
+                            rawSig = tf === '4h' ? ind.qqe_4h : tf === '1d' ? ind.qqe_1d : ind.qqe_1h;
+                        }
                         if (rawSig === 'AL' || rawSig === 'SAT') displaySignal = rawSig;
                     } else if (botConfig.lastSignal === 'AL' || botConfig.lastSignal === 'SAT') {
                         displaySignal = botConfig.lastSignal;
@@ -85,12 +91,13 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                             <div className="stock-bot-strategy" style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                                 <select
                                     className="bot-amount-input"
-                                    style={{ width: '70px', padding: '0.2rem' }}
+                                    style={{ width: '85px', padding: '0.2rem' }}
                                     value={botConfig.strategy || 'QQE'}
                                     onChange={(e) => onUpdateBot(stock.symbol, { strategy: e.target.value })}
                                     disabled={!botConfig.active}
                                 >
                                     <option value="QQE">QQE</option>
+                                    <option value="Fisher-BB-EMA">Fisher+</option>
                                 </select>
                                 <select
                                     className="bot-amount-input"

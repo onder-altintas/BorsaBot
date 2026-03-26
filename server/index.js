@@ -1057,7 +1057,7 @@ app.get('/api/signals/performance', async (req, res) => {
     try {
         const COMMISSION_RATE = 0.0005; // %0.05 alım + %0.05 satım
         const TIMEFRAMES = ['1h', '4h', '1d'];
-        const STRATEGIES = ['QQE', 'Fisher-BB-EMA'];
+        const STRATEGIES = ['QQE', 'Fisher-BB-EMA', 'MACD', 'RSI'];
         const symbols = marketData.map(s => s.symbol);
 
         const allRecords = await SignalHistory.find({ symbol: { $in: symbols } })

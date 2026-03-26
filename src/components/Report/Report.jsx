@@ -4,7 +4,8 @@ import './Report.css';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
-const TF_LABELS = { '1h': 'QQE 1S', '4h': 'QQE 4S', '1d': 'QQE Günlük' };
+const QQE_LABELS = { '1h': 'QQE 1S', '4h': 'QQE 4S', '1d': 'QQE Günlük' };
+const FISHER_LABELS = { '1h': 'Fisher 1S', '4h': 'Fisher 4S', '1d': 'Fisher Günlük' };
 const TIMEFRAMES = ['1h', '4h', '1d'];
 
 const getRateClass = (rate) => {
@@ -29,7 +30,6 @@ const RateCell = ({ data }) => {
 
 const Report = ({ marketData }) => {
     const [view, setView] = useState('summary'); // 'summary' veya 'history'
-    const [selectedStrategy, setSelectedStrategy] = useState('QQE'); // 'QQE' veya 'Fisher-BB-EMA'
     const [perfData, setPerfData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [lastUpdated, setLastUpdated] = useState(null);
@@ -78,18 +78,7 @@ const Report = ({ marketData }) => {
                             📜 Sinyal Geçmişi
                         </button>
                     </div>
-                    {view === 'summary' && (
-                        <select 
-                            className="strategy-select-minimal"
-                            value={selectedStrategy}
-                            onChange={(e) => setSelectedStrategy(e.target.value)}
-                            style={{ marginLeft: '1rem', padding: '0.3rem', borderRadius: '4px', background: 'var(--card-bg)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
-                        >
-                            <option value="QQE">Strateji: QQE</option>
-                            <option value="Fisher-BB-EMA">Strateji: Fisher+</option>
-                        </select>
-                    )}
-                    {view === 'summary' && <button className="report-refresh-btn" style={{ marginLeft: '0.5rem' }} onClick={fetchPerformance}>↻ Yenile</button>}
+                    {view === 'summary' && <button className="report-refresh-btn" style={{ marginLeft: '1rem' }} onClick={fetchPerformance}>↻ Yenile</button>}
                 </div>
             </div>
 
@@ -115,7 +104,10 @@ const Report = ({ marketData }) => {
                                         <th className="col-symbol">Hisse</th>
                                         <th className="col-best">🏆 En İyi Strateji</th>
                                         {TIMEFRAMES.map(tf => (
-                                            <th key={tf} className="col-tf">{TF_LABELS[tf]}</th>
+                                            <th key={`q-${tf}`} className="col-tf" style={{ borderLeft: tf === '1h' ? '2px solid var(--border-color)' : '' }}>{QQE_LABELS[tf]}</th>
+                                        ))}
+                                        {TIMEFRAMES.map(tf => (
+                                            <th key={`f-${tf}`} className="col-tf" style={{ borderLeft: tf === '1h' ? '2px solid var(--border-color)' : '' }}>{FISHER_LABELS[tf]}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -123,7 +115,8 @@ const Report = ({ marketData }) => {
                                     {symbols.map(symbol => {
                                         const stock = marketData.find(s => s.symbol === symbol);
                                         const d = perfData?.[symbol];
-                                        const stratData = d?.[selectedStrategy];
+                                        const qqeData = d?.QQE;
+                                        const fisherData = d?.['Fisher-BB-EMA'];
                                         const best = d?.best;
                                         const shortName = stock?.name || symbol.replace('.IS', '');
 
@@ -136,14 +129,17 @@ const Report = ({ marketData }) => {
                                                 <td className="col-best-cell">
                                                     {best ? (
                                                         <span className={`best-badge ${getRateClass(best.rate)}`}>
-                                                            {best.strategy === 'QQE' ? 'QQE' : 'Fisher+'} {TF_LABELS[best.timeframe].split(' ')[1]} · %{best.rate}
+                                                            {best.strategy === 'QQE' ? 'QQE' : 'Fisher+'} {best.timeframe === '1h' ? '1S' : best.timeframe === '4h' ? '4S' : 'Günlük'} · %{best.rate}
                                                         </span>
                                                     ) : (
                                                         <span className="no-data">Veri yok</span>
                                                     )}
                                                 </td>
                                                 {TIMEFRAMES.map(tf => (
-                                                    <RateCell key={tf} data={stratData?.[tf]} />
+                                                    <RateCell key={`q-${tf}`} data={qqeData?.[tf]} />
+                                                ))}
+                                                {TIMEFRAMES.map(tf => (
+                                                    <RateCell key={`f-${tf}`} data={fisherData?.[tf]} />
                                                 ))}
                                             </tr>
                                         );

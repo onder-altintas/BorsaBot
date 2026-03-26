@@ -505,13 +505,6 @@ const calculateIndicators = (history, currentPrice, symbol) => {
     const sma5 = prices.slice(-5).reduce((a, b) => a + b, 0) / Math.min(prices.length, 5);
     const sma10 = prices.slice(-10).reduce((a, b) => a + b, 0) / Math.min(prices.length, 10);
 
-    let gains = 0, losses = 0;
-    for (let i = Math.max(1, prices.length - 14); i < prices.length; i++) {
-        const diff = prices[i] - prices[i - 1];
-        if (diff >= 0) gains += diff; else losses -= diff;
-    }
-    const rsi = losses === 0 ? 100 : 100 - (100 / (1 + gains / losses));
-
     const { line, signal, hist } = calculateMACD(prices);
     const rsiArr = calculateRSISeries(prices, 14);
     const rsi = rsiArr[rsiArr.length - 1] || 50;

@@ -2,8 +2,35 @@ import React from 'react';
 import './Market.css';
 
 const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
+    // Endeksleri ana listeden ayır
+    const bist30 = stocks.find(s => s.symbol === 'XU030.IS');
+    const filteredStocks = stocks.filter(s => s.symbol !== 'XU030.IS' && s.symbol !== 'XU100.IS');
+
     return (
         <div className="market-container fade-in">
+            {bist30 && (
+                <div className="index-dashboard">
+                    <div className={`index-card ${bist30.change >= 0 ? 'trend-up' : 'trend-down'}`}>
+                        <div className="index-card-header">
+                            <span className="index-title">BIST 30 Endeksi</span>
+                            <span className="index-icon">{bist30.change >= 0 ? '📈' : '📉'}</span>
+                        </div>
+                        <div className="index-value-container">
+                            <span className="index-price">
+                                {bist30.price.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                            </span>
+                            <div className={`index-change-badge ${bist30.change >= 0 ? 'up' : 'down'}`}>
+                                {bist30.change >= 0 ? '▲' : '▼'} %{bist30.changePercent}
+                            </div>
+                        </div>
+                        <div className="index-card-footer">
+                            <div className="live-dot"></div>
+                            <span>Canlı Veri • Son Güncelleme: {new Date().toLocaleTimeString('tr-TR')}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="market-header">
                 <h2>Borsa İstanbul (BIST 100)</h2>
                 <p className="text-secondary">Veriler 15 dakika gecikmelidir (Simüle edildi).</p>
@@ -21,7 +48,7 @@ const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
                     <span>İşlem</span>
                 </div>
 
-                {stocks.map(stock => {
+                {filteredStocks.map(stock => {
                     const rsiValue = stock.indicators?.rsi || 50;
                     const rsiColor = rsiValue > 70 ? 'text-error' : rsiValue < 30 ? 'text-success' : 'text-secondary';
                     const botConfig = botConfigs[stock.symbol] || { active: false, amount: 1 };

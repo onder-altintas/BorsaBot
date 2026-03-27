@@ -2,6 +2,117 @@
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    padding-bottom: 2rem;
+}
+
+/* Index Dashboard Styles */
+.index-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.index-card {
+    background: var(--glass);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.index-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+    border-color: var(--accent-primary);
+}
+
+.index-card.trend-up {
+    border-left: 4px solid var(--success);
+}
+
+.index-card.trend-down {
+    border-left: 4px solid var(--error);
+}
+
+.index-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.index-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.index-icon {
+    font-size: 1.25rem;
+}
+
+.index-value-container {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.index-price {
+    font-size: 2.25rem;
+    font-weight: 800;
+}
+
+.index-change-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 2rem;
+    font-weight: 700;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.index-change-badge.up {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+}
+
+.index-change-badge.down {
+    background: rgba(244, 63, 94, 0.15);
+    color: var(--error);
+}
+
+.index-card-footer {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.live-dot {
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #10b981;
+    animation: pulse-live 2s infinite;
+}
+
+@keyframes pulse-live {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
 .stock-table-header {

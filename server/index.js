@@ -188,6 +188,7 @@ const BIST_STOCK_SYMBOLS = [
     { symbol: 'TUPRS.IS', name: 'Tüpraş' },
     { symbol: 'ULKER.IS', name: 'Ülker Bisküvi' },
     { symbol: 'YKBNK.IS', name: 'Yapı Kredi' },
+    { symbol: 'XU030.IS', name: 'BIST 30 Endeksi' },
 ];
 
 let marketData = BIST_STOCK_SYMBOLS.map(stock => ({

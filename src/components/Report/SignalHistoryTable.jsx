@@ -95,7 +95,7 @@ const SignalHistoryTable = () => {
                             <tr><td colSpan="6" className="text-center p-8">Sinyaller yükleniyor...</td></tr>
                         ) : history.length === 0 ? (
                             <tr><td colSpan="6" className="text-center p-8">Kayıt bulunamadı.</td></tr>
-                        ) : history.map((rec, idx) => (
+                        ) : history.filter(rec => !rec.symbol.startsWith('XU')).map((rec, idx) => (
                             <tr key={rec._id || idx}>
                                 <td className="text-secondary" style={{fontSize: '0.8rem', whiteSpace: 'nowrap'}}>
                                     {rec.date} {rec.time}

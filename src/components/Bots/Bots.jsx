@@ -27,7 +27,7 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                     <span>Take-Profit</span>
                 </div>
 
-                {marketData.map(stock => {
+                {marketData.filter(s => !s.symbol.startsWith('XU')).map(stock => {
                     const botConfig = (botConfigs && typeof botConfigs.get === 'function'
                         ? botConfigs.get(stock.symbol)
                         : botConfigs?.[stock.symbol]) || { active: false, amount: 1 };

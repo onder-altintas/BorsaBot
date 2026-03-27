@@ -154,7 +154,7 @@ const Report = ({ marketData }) => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {symbols.map(symbol => {
+                                    {symbols.filter(s => !s.startsWith('XU')).map(symbol => {
                                         const stock = marketData.find(s => s.symbol === symbol);
                                         const d = perfData?.[symbol];
                                         const qqeData = d?.QQE;

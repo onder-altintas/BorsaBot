@@ -264,7 +264,7 @@ function App() {
               <div className="card-premium mt-6">
                 <h4 className="mb-4">Hızlı Takip (BIST 100)</h4>
                 <div className="quick-market">
-                  {marketData.slice(0, 4).map(stock => (
+                  {marketData.filter(s => !s.symbol.startsWith('XU')).slice(0, 4).map(stock => (
                     <div key={stock.symbol} className="quick-item glass">
                       <span className="font-bold">{stock.symbol}</span>
                       <span className="font-bold">₺{stock.price}</span>

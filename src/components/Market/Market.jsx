@@ -2,9 +2,11 @@ import React from 'react';
 import './Market.css';
 
 const Market = ({ stocks, onTrade, botConfigs = {}, onUpdateBot }) => {
-    // Endeksleri ana listeden ayır
+    // Endeksleri ana listeden ayır (Kendi özel kartında gösterilecek)
     const bist30 = stocks.find(s => s.symbol === 'XU030.IS');
-    const filteredStocks = stocks.filter(s => s.symbol !== 'XU030.IS' && s.symbol !== 'XU100.IS');
+    
+    // XU ile başlayan tüm sembolleri (BIST 100, BIST 30 vb.) ana listeden çıkar
+    const filteredStocks = stocks.filter(s => !s.symbol.startsWith('XU'));
 
     return (
         <div className="market-container fade-in">

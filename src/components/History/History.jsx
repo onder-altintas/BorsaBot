@@ -42,6 +42,7 @@ const History = ({ history }) => {
                                 <th>Adet</th>
                                 <th>Fiyat</th>
                                 <th>Toplam</th>
+                                <th>Sinyal / Neden</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -60,6 +61,9 @@ const History = ({ history }) => {
                                     <td>{item.amount}</td>
                                     <td>₺{item.price.toFixed(2)}</td>
                                     <td className="font-bold">₺{item.total.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                                    <td className="text-sm">
+                                        <span className="reason-text">{item.reason || '-'}</span>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

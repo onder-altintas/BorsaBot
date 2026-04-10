@@ -1248,7 +1248,8 @@ app.post('/api/trade/buy', async (req, res) => {
             commission: commission,
             total: totalCost,
             date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
-            isAuto: false
+            isAuto: false,
+            reason: 'Manuel İşlem'
         }, ...user.history];
 
         await user.save();
@@ -1294,7 +1295,8 @@ app.post('/api/trade/sell', async (req, res) => {
             commission: commission,
             total: netRevenue,
             date: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
-            isAuto: false
+            isAuto: false,
+            reason: 'Manuel İşlem'
         }, ...user.history];
 
         await user.save();

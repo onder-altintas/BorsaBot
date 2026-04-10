@@ -48,26 +48,36 @@ const Bots = ({ marketData, botConfigs, onUpdateBot }) => {
                             ? botConfigs.get(stock.symbol)
                             : botConfigs?.[stock.symbol]) || { active: false, amount: 1 };
 
-                        let displaySignal = 'BEKLİYOR';
+                        // 1. Önce veritabanındaki (backend'deki) aktif sinyali al (Botun o anki durumu bu)
+                        let displaySignal = botConfig.lastSignal || 'BEKLİYOR';
+
+                        // 2. Eğer canlı veri (marketData) varsa, indikatörlerden gelen taze sinyali kontrol et
                         const tf = botConfig.timeframe || '1h';
                         const strat = botConfig.strategy || 'QQE';
                         const stockData = marketData.find ? marketData.find(s => s.symbol === stock.symbol) : null;
+
                         if (stockData) {
                             const ind = stockData.indicators || {};
-                            let rawSig = 'TUT';
+                            let liveSig = 'TUT';
                             if (strat === 'Fisher-BB-EMA') {
-                                rawSig = tf === '4h' ? ind.fisher_4h : tf === '1d' ? ind.fisher_1d : ind.fisher_1h;
+                                liveSig = tf === '4h' ? ind.fisher_4h : tf === '1d' ? ind.fisher_1d : ind.fisher_1h;
                             } else if (strat === 'MACD') {
-                                rawSig = tf === '4h' ? ind.macd_4h : tf === '1d' ? ind.macd_1d : ind.macd_1h;
+                                liveSig = tf === '4h' ? ind.macd_4h : tf === '1d' ? ind.macd_1d : ind.macd_1h;
                             } else if (strat === 'RSI') {
-                                rawSig = tf === '4h' ? ind.rsi_4h : tf === '1d' ? ind.rsi_1d : ind.rsi_1h;
+                                liveSig = tf === '4h' ? ind.rsi_4h : tf === '1d' ? ind.rsi_1d : ind.rsi_1h;
                             } else {
-                                rawSig = tf === '4h' ? ind.qqe_4h : tf === '1d' ? ind.qqe_1d : ind.qqe_1h;
+                                liveSig = tf === '4h' ? ind.qqe_4h : tf === '1d' ? ind.qqe_1d : ind.qqe_1h;
                             }
-                            if (rawSig === 'AL' || rawSig === 'SAT') displaySignal = rawSig;
-                        } else if (botConfig.lastSignal === 'AL' || botConfig.lastSignal === 'SAT') {
-                            displaySignal = botConfig.lastSignal;
+                            
+                            // Eğer canlı bir AL/SAT sinyali varsa onu göster. 
+                            // Değilse (TUT ise) veritabanındaki lastSignal (AL/SAT olabilir) gösterilmeye devam eder.
+                            if (liveSig === 'AL' || liveSig === 'SAT') {
+                                displaySignal = liveSig;
+                            }
                         }
+
+                        // Eğer hala 'TUT' ise kullanıcıya 'BEKLİYOR' yerine 'BEKLE' veya 'TUT' gösterebiliriz ama 'BEKLİYOR' kalsın.
+                        if (displaySignal === 'TUT') displaySignal = 'BEKLİYOR';
 
 
                         let timerDisplay = '--:--';

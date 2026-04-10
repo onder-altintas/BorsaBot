@@ -31,7 +31,13 @@ Bu proje, Borsa İstanbul (BIST 100) verilerini simüle eden, gelişmiş teknik 
 ### 3. Akıllı Trading Botları
 - **SL/TP Yönetimi:** Her bot için özel **Stop-Loss** ve **Take-Profit** seviyeleri tanımlanabilir.
 - **Otomatik İşlem:** Botlar, belirlenen stratejiye göre kullanıcı adına 7/24 (sunucu açıkken) işlem yapar.
+- **Sinyal Takibi:** İşlem geçmişinde her bir işlemin hangi sinyal (QQE, MACD vb.) ile tetiklendiği kaydedilir.
 - **Bulut Senkronizasyonu:** Bot ayarları MongoDB üzerinden her kullanıcı için bağımsız ve kalıcıdır.
+
+---
+
+## 📊 Proje Analizi
+Projenin mimarisi, teknik detayları ve gelecek planları hakkında detaylı inceleme raporuna [ANALYSIS.md](./ANALYSIS.md) dosyasından ulaşabilirsiniz.
 
 ---
 

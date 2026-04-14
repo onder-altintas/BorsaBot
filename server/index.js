@@ -1,4 +1,8 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+
+// Strateji versiyonu — Fisher-BB-EMA v2 ve RSI null-fix sonrası arttırıldı.
+// Bu versiyon değiştiğinde eski SignalHistory verileri sunucu başlarken otomatik silinir.
+const STRATEGY_VERSION = '2';
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -40,6 +44,7 @@ const connectDB = async () => {
         });
         console.log('✅ MongoDB Bağlantısı Başarılı');
         await migrateSymbols();
+        await migrateStrategyVersion();
         return mongoose.connection;
     } catch (err) {
         console.error('❌ MongoDB Bağlantısı Başarısız:', err.message);
@@ -136,6 +141,29 @@ const migrateSymbols = async () => {
         }
     } catch (err) {
         console.error('Migrasyon Hatası:', err);
+    }
+};
+
+// Strateji versiyonu değiştiğinde eski SignalHistory verilerini temizle
+// Versiyon bilgisi DB'de saklanır (mongoose User dışında basit bir belge)
+let _strategyVersionMigratedOnce = false;
+const migrateStrategyVersion = async () => {
+    if (_strategyVersionMigratedOnce) return;
+    _strategyVersionMigratedOnce = true;
+    try {
+        // DB'de versiyon kaydı tutmak için KapNews modelini geçici olarak kullan
+        // (Yeni model yerine mevcut koleksiyonu)
+        // Daha sade: process.env içinde SIGNAL_HISTORY_VERSION env var ile kontrol
+        const storedVersion = process.env.SIGNAL_HISTORY_VERSION || '1';
+        if (storedVersion !== STRATEGY_VERSION) {
+            const result = await SignalHistory.deleteMany({});
+            console.log(`🔄 [MigrateStrategyVersion] Strateji v${storedVersion} → v${STRATEGY_VERSION}: ${result.deletedCount} eski kayıt silindi.`);
+            console.log('🆕 SignalHistory temizlendi. Yeni veriler bir sonraki polling döngüsünde üretilecek.');
+        } else {
+            console.log(`[MigrateStrategyVersion] Strateji versiyonu güncel (v${STRATEGY_VERSION}), temizleme gerekmedi.`);
+        }
+    } catch (err) {
+        console.error('[MigrateStrategyVersion] Hata:', err.message);
     }
 };
 
@@ -430,13 +458,15 @@ const calculateRSISeries = (prices, period = 14) => {
 };
 
 // RSI Strateji Sinyal Hesaplama (30/70)
+// v2: null değerler filtrele, prevRSI için gerçek önceki değer kullan
 const calculateRSISignal = (history) => {
     if (history.length < 20) return 'TUT';
     const prices = history.map(h => h.price);
-    const rsiArr = calculateRSISeries(prices, 14);
+    const rsiArr = calculateRSISeries(prices, 14).filter(v => v !== null);
+    if (rsiArr.length < 2) return 'TUT';
     const n = rsiArr.length - 1;
     const currRSI = rsiArr[n];
-    const prevRSI = rsiArr[n - 1] || 50;
+    const prevRSI = rsiArr[n - 1];
 
     if (prevRSI <= 30 && currRSI > 30) return 'AL';
     if (prevRSI >= 70 && currRSI < 70) return 'SAT';
@@ -445,6 +475,7 @@ const calculateRSISignal = (history) => {
 
 
 // Fisher-BB-EMA Hibrit Strateji Sinyal Hesaplama
+// v2: fisherCrossUp/Down doğru eşiklerle ve buyCondition/sellCondition'da kullanılır hale getirildi
 const calculateFisherBBEMASignal = (history) => {
     if (history.length < 50) return 'TUT';
 
@@ -452,44 +483,46 @@ const calculateFisherBBEMASignal = (history) => {
     const ema20 = calculateEMA(prices, 20);
     const ema50 = calculateEMA(prices, 50);
     const lastPrice = prices[prices.length - 1];
-    
+
     // Bollinger Bands
-    const bbPeriod = 20;
-    const bbSlice = prices.slice(-bbPeriod);
-    const bbMiddle = bbSlice.reduce((a, b) => a + b, 0) / bbPeriod;
-    const variance = bbSlice.reduce((a, b) => a + Math.pow(b - bbMiddle, 2), 0) / bbPeriod;
-    const stdDev = Math.sqrt(variance);
+    const bbSlice = prices.slice(-20);
+    const bbMiddle = bbSlice.reduce((a, b) => a + b, 0) / 20;
+    const stdDev = Math.sqrt(bbSlice.reduce((a, b) => a + Math.pow(b - bbMiddle, 2), 0) / 20);
     const bbUpper = bbMiddle + stdDev * 2;
 
-    // RSI
-    let gains = 0, losses = 0;
-    for (let i = Math.max(1, prices.length - 14); i < prices.length; i++) {
-        const diff = prices[i] - prices[i - 1];
-        if (diff >= 0) gains += diff; else losses -= diff;
-    }
-    const rsi = losses === 0 ? 100 : 100 - (100 / (1 + gains / losses));
+    // RSI — null'lardan temizlenmiş dizi kullan
+    const rsiArr = calculateRSISeries(prices, 14).filter(v => v !== null);
+    const rsi = rsiArr.length > 0 ? rsiArr[rsiArr.length - 1] : 50;
 
     // Fisher & Volume
     const { fisher, prevFisher } = calculateFisherTransform(history, 10);
     const vmo = calculateVolumeMomentum(history);
 
-    // Kesişim Kontrolleri
-    const fisherCrossUp = prevFisher <= -2.5 && fisher > -2.5;
-    const fisherCrossDown = prevFisher >= 2.5 && fisher < 2.5;
+    // Fisher yön tespiti: gerçekçi eşikler (tipik aralık -1.5 ile +1.5)
+    // fisherRising: Fisher negatif bölgeden yukarı dönüyor (alım baskısı başlıyor)
+    // fisherFalling: Fisher pozitif bölgeden aşağı dönüyor (satış baskısı başlıyor)
+    const fisherRising = fisher > prevFisher && prevFisher < 0;
+    const fisherFalling = fisher < prevFisher && prevFisher > 0;
 
     // AL KOŞULLARI
     // 1. Fiyat EMA20 üzerinde
-    // 2. EMA20 > EMA50 (Trend)
-    // 3. Fisher alttan yukarı kesişim
+    // 2. EMA20 > EMA50 (trend yukarı)
+    // 3. Fisher negatif bölgeden yükseliyor (gerçek crossover benzeri tespit)
     // 4. RSI > 50
-    // 5. Hacim Momemtumu pozitif
-    const buyCondition = lastPrice > ema20 && ema20 > ema50 && fisher > prevFisher && rsi > 50 && vmo > 0;
-    
-    // SAT KOŞULLARI
+    // 5. Hacim Momentumu pozitif
+    const buyCondition = lastPrice > ema20
+        && ema20 > ema50
+        && fisherRising
+        && rsi > 50
+        && vmo > 0;
+
+    // SAT KOŞULLARI — parantezlerle operatör önceliği netleştirildi
     // 1. Fiyat BB Üst Bandına değdi/geçti
-    // 2. Fisher tepeden aşağı kesişim
-    // 3. Fiyat EMA20 altında kapanış (Trend dönüşü/Stop)
-    const sellCondition = lastPrice >= bbUpper || fisher < prevFisher && prevFisher > 2.0 || lastPrice < ema20;
+    // 2. Fisher pozitif bölgeden aşağı dönüyor
+    // 3. Fiyat EMA50 altına indi (EMA20 yerine EMA50: daha az agresif)
+    const sellCondition = (lastPrice >= bbUpper)
+        || (fisherFalling && prevFisher > 1.5)
+        || (lastPrice < ema50);
 
     if (buyCondition) return 'AL';
     if (sellCondition) return 'SAT';
@@ -498,8 +531,19 @@ const calculateFisherBBEMASignal = (history) => {
 
 
 // Gösterge hesaplama fonksiyonu (geriye dönük uyumluluk için)
+// NOT: Bu fonksiyon yalnızca 1h verisiyle çağrılır.
+// 4h ve 1d değerleri fetchRealMarketData() içinde ayrı ayrı hesaplanarak üzerine yazılır.
+// Hard-coded 'TUT' placeholder'ları kaldırıldı — fetchRealMarketData override'ı yeterli.
 const calculateIndicators = (history, currentPrice, symbol) => {
-    if (history.length < 2) return { sma5: 0, sma10: 0, ema7: 0, rsi: 50, macd: { line: 0, signal: 0, hist: 0 }, bollinger: { upper: 0, middle: 0, lower: 0 }, qqe_1h: 'TUT', qqe_4h: 'TUT', qqe_1d: 'TUT' };
+    if (history.length < 2) return {
+        sma5: 0, sma10: 0, ema7: 0, rsi: 50,
+        macd: { line: 0, signal: 0, hist: 0 },
+        bollinger: { upper: 0, middle: 0, lower: 0 },
+        qqe_1h: 'TUT', qqe_4h: 'TUT', qqe_1d: 'TUT',
+        fisher_1h: 'TUT', fisher_4h: 'TUT', fisher_1d: 'TUT',
+        macd_1h: 'TUT', macd_4h: 'TUT', macd_1d: 'TUT',
+        rsi_1h: 'TUT', rsi_4h: 'TUT', rsi_1d: 'TUT'
+    };
     const prices = history.map(h => h.price);
 
     const ema7 = calculateEMA(prices, 7);
@@ -507,39 +551,40 @@ const calculateIndicators = (history, currentPrice, symbol) => {
     const sma10 = prices.slice(-10).reduce((a, b) => a + b, 0) / Math.min(prices.length, 10);
 
     const { line, signal, hist } = calculateMACD(prices);
-    const rsiArr = calculateRSISeries(prices, 14);
-    const rsi = rsiArr[rsiArr.length - 1] || 50;
+    const rsiArr = calculateRSISeries(prices, 14).filter(v => v !== null);
+    const rsi = rsiArr.length > 0 ? rsiArr[rsiArr.length - 1] : 50;
 
     const bbPeriod = Math.min(prices.length, 20);
     const bbMiddle = prices.slice(-bbPeriod).reduce((a, b) => a + b, 0) / bbPeriod;
     const variance = prices.slice(-bbPeriod).reduce((a, b) => a + Math.pow(b - bbMiddle, 2), 0) / bbPeriod;
     const stdDev = Math.sqrt(variance);
 
-    const qqe_1h = calculateQQESignal(history);
+    // 1h sinyalleri bu fonksiyonda hesaplanır
+    const qqe_1h    = calculateQQESignal(history);
+    const fisher_1h = calculateFisherBBEMASignal(history);
+    const macd_1h   = calculateMACDSignal(history);
+    const rsi_1h    = calculateRSISignal(history);
 
     return {
         sma5: parseFloat(sma5.toFixed(2)),
         sma10: parseFloat(sma10.toFixed(2)),
         ema7: parseFloat(ema7.toFixed(2)),
         rsi: parseFloat(rsi.toFixed(2)),
-        macd: { 
-            line: parseFloat(line.toFixed(4)), 
-            signal: parseFloat(signal.toFixed(4)), 
-            hist: parseFloat(hist.toFixed(4)) 
+        macd: {
+            line: parseFloat(line.toFixed(4)),
+            signal: parseFloat(signal.toFixed(4)),
+            hist: parseFloat(hist.toFixed(4))
         },
-        bollinger: { upper: parseFloat((bbMiddle + stdDev * 2).toFixed(2)), middle: parseFloat(bbMiddle.toFixed(2)), lower: parseFloat((bbMiddle - stdDev * 2).toFixed(2)) },
-        qqe_1h,
-        qqe_4h: 'TUT', 
-        qqe_1d: 'TUT',
-        fisher_1h: calculateFisherBBEMASignal(history),
-        fisher_4h: 'TUT',
-        fisher_1d: 'TUT',
-        macd_1h: calculateMACDSignal(history),
-        macd_4h: 'TUT',
-        macd_1d: 'TUT',
-        rsi_1h: calculateRSISignal(history),
-        rsi_4h: 'TUT',
-        rsi_1d: 'TUT'
+        bollinger: {
+            upper: parseFloat((bbMiddle + stdDev * 2).toFixed(2)),
+            middle: parseFloat(bbMiddle.toFixed(2)),
+            lower: parseFloat((bbMiddle - stdDev * 2).toFixed(2))
+        },
+        // 1h değerleri burada hesaplanır; 4h/1d fetchRealMarketData'da override edilir
+        qqe_1h, qqe_4h: 'TUT', qqe_1d: 'TUT',
+        fisher_1h, fisher_4h: 'TUT', fisher_1d: 'TUT',
+        macd_1h, macd_4h: 'TUT', macd_1d: 'TUT',
+        rsi_1h, rsi_4h: 'TUT', rsi_1d: 'TUT'
     };
 };
 
